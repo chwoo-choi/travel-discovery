@@ -5,9 +5,9 @@ import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/prisma";
 
 export type AuthUser = {
-  id: number;
-  name: string;
-  email: string;
+  id: string;
+  name: string | null;
+  email: string| null;
 };
 
 // jsonwebtoken의 JwtPayload에 우리가 쓰는 필드만 살짝 얹어서 사용
@@ -40,7 +40,7 @@ async function getUserFromToken(token: string | undefined): Promise<AuthUser | n
     if (!userId) return null;
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: String(userId) },
       select: {
         id: true,
         name: true,

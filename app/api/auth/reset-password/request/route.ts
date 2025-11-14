@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       where: { id: user.id },
       data: {
         resetPasswordToken: token,
-        resetPasswordTokenExpiresAt: expiresAt,
+        resetPasswordExpires: expiresAt,
       },
     });
 

@@ -23,6 +23,9 @@ model User {
   passwordHash      String?   // 소셜 로그인은 비번이 없을 수 있음
   googleId          String?   @unique // 구글 ID 저장용
 
+  resetPasswordToken String?   @unique 
+  resetPasswordExpires DateTime?
+  
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
@@ -32,6 +35,11 @@ model EmailVerificationCode {
   email     String
   code      String   @unique
   expiresAt DateTime
+
+  used      Boolean  @default(false) // 코드 사용 여부 추적용
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([email, code])
 }
