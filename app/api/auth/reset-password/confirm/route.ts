@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
     // 토큰이 없거나, 만료되었으면 에러
     if (
       !user ||
-      !user.resetPasswordTokenExpiresAt ||
-      user.resetPasswordTokenExpiresAt.getTime() < Date.now()
+      !user.resetPasswordExpires ||
+      user.resetPasswordExpires.getTime() < Date.now()
     ) {
       return NextResponse.json(
         {
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       data: {
         passwordHash,
         resetPasswordToken: null,
-        resetPasswordTokenExpiresAt: null,
+        resetPasswordExpires: null,
       },
     });
 
