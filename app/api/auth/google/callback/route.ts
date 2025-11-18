@@ -26,6 +26,21 @@ type GoogleUserInfo = {
   picture?: string;
 };
 
+// 베이스 URL 결정: 환경변수 우선, 없으면 req.nextUrl.origin
+function getBaseUrl(req: NextRequest): string {
+  const fromEnv =
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    process.env.APP_URL ??
+    process.env.BASE_URL;
+
+  if (fromEnv) {
+    // 끝에 / 있으면 제거
+    return fromEnv.replace(/\/+$/, "");
+  }
+
+  return req.nextUrl.origin;
+}
+
 // 공통: 구글 OAuth 관련 쿠키 제거
 function clearGoogleOauthCookies(res: NextResponse) {
   res.cookies.set("google_oauth_state", "", {
@@ -40,7 +55,8 @@ function clearGoogleOauthCookies(res: NextResponse) {
 
 // 에러 발생 시 로그인 페이지로 리다이렉트
 function redirectToLogin(req: NextRequest, errorCode: string) {
-  const url = new URL("/login", req.nextUrl.origin);
+  const baseUrl = getBaseUrl(req);
+  const url = new URL("/login", baseUrl);
   url.searchParams.set("error", errorCode);
 
   const res = NextResponse.redirect(url);
@@ -54,8 +70,9 @@ function redirectWithToken(
   redirectPath: string,
   token: string
 ) {
+  const baseUrl = getBaseUrl(req);
   const safePath = redirectPath.startsWith("/") ? redirectPath : "/";
-  const url = new URL(safePath, req.nextUrl.origin);
+  const url = new URL(safePath, baseUrl);
 
   const res = NextResponse.redirect(url);
 
@@ -93,9 +110,8 @@ export async function GET(req: NextRequest) {
     const state = url.searchParams.get("state");
     const storedState = req.cookies.get("google_oauth_state")?.value;
     const redirectCookie = req.cookies.get("google_oauth_redirect_to")?.value;
-    const redirectTo = redirectCookie && redirectCookie.startsWith("/")
-      ? redirectCookie
-      : "/";
+    const redirectTo =
+      redirectCookie && redirectCookie.startsWith("/") ? redirectCookie : "/";
 
     // 필수 파라미터/상태 검증
     if (!code) {
@@ -109,9 +125,10 @@ export async function GET(req: NextRequest) {
     }
 
     // redirect_uri는 시작 단계와 동일하게 맞춰야 함
+    const baseUrl = getBaseUrl(req);
     const callbackUrl =
       explicitRedirectUri ||
-      new URL("/api/auth/google/callback", req.nextUrl.origin).toString();
+      new URL("/api/auth/google/callback", baseUrl).toString();
 
     // 1) code로 access_token 교환
     const tokenEndpoint = "https://oauth2.googleapis.com/token";
@@ -171,12 +188,9 @@ export async function GET(req: NextRequest) {
     const profile = (await userInfoRes.json()) as GoogleUserInfo;
 
     const googleId = profile.sub;
-    const email =
-      profile.email?.trim().toLowerCase() ?? null;
+    const email = profile.email?.trim().toLowerCase() ?? null;
     const name =
-      profile.name ||
-      profile.given_name ||
-      "구글 사용자";
+      profile.name || profile.given_name || "구글 사용자";
 
     if (!googleId) {
       console.error("Google 사용자 정보에 sub(googleId)가 없습니다.");
@@ -208,7 +222,6 @@ export async function GET(req: NextRequest) {
           where: { id: existingByEmail.id },
           data: {
             googleId,
-            // 기존에 이메일 인증 시간이 없다면, 구글이 email_verified == true 일 때만 세팅
             emailVerifiedAt:
               existingByEmail.emailVerifiedAt ?? emailVerifiedAt,
           },
