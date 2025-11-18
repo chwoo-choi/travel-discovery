@@ -79,11 +79,14 @@ function redirectWithToken(
   // 구글 OAuth 관련 임시 쿠키 제거
   clearGoogleOauthCookies(res);
 
-  // 세션 토큰 설정 (이전에 만든 login/signup 과 동일 규칙)
+  // baseUrl을 기준으로 https 여부 판단
+  const isHttps = baseUrl.startsWith("https://");
+
+  // 세션 토큰 설정 (login/signup 과 동일 구조, secure만 환경 기반으로)
   res.cookies.set("token", token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps, // 👉 HTTPS일 때만 secure 쿠키, 현재 duckdns:80에서는 false
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7일
   });
@@ -242,7 +245,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 4) JWT 발급 (기존 login/signup 과 동일한 payload/옵션)
+    // 4) JWT 발급 (login/signup 과 동일한 payload/옵션)
     const token = jwt.sign(
       {
         sub: user.id,
