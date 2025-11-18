@@ -24,15 +24,18 @@ export async function GET(req: NextRequest) {
     explicitRedirectUri ||
     new URL("/api/auth/google/callback", req.nextUrl.origin).toString();
 
+  // 현재 요청이 https인지 여부에 따라 secure 쿠키 여부 결정
+  // (duckdns에서 http라면 secure=false가 되어 쿠키가 정상 동작함)
+  const isHttps = req.nextUrl.protocol === "https:";
+
   // CSRF 방지를 위한 랜덤 state 생성
   const state = crypto.randomBytes(16).toString("hex");
 
   // 로그인 후 어디로 보낼지 (선택 사항)
   // 예: /api/auth/google?redirect=/bookmark
   const redirectParam = req.nextUrl.searchParams.get("redirect");
-  const redirectTo = redirectParam && redirectParam.startsWith("/")
-    ? redirectParam
-    : "/";
+  const redirectTo =
+    redirectParam && redirectParam.startsWith("/") ? redirectParam : "/";
 
   const scope = ["openid", "email", "profile"].join(" ");
 
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest) {
   res.cookies.set("google_oauth_state", state, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps, // ★ http 환경에서는 false → 쿠키가 제대로 저장됨
     path: "/",
     maxAge: 60 * 10, // 10분
   });
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest) {
   res.cookies.set("google_oauth_redirect_to", redirectTo, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     path: "/",
     maxAge: 60 * 10,
   });
