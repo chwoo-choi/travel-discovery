@@ -1,79 +1,83 @@
 // app/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DayPicker } from "react-day-picker";
+import { format, differenceInCalendarDays, isAfter } from "date-fns";
+import { ko } from "date-fns/locale";
 
 const PEOPLE_OPTIONS = ["1명", "2명", "3명", "4명 이상"];
 const BUDGET_LEVEL_OPTIONS = ["실속형", "스탠다드", "프리미엄"];
 
-const THEME_OPTIONS = ["휴양", "관광", "액티비티", "문화"];
-const ACCOMMODATION_OPTIONS = ["호텔", "리조트", "에어비앤비", "호스텔"];
-
 export default function HomePage() {
   const router = useRouter();
 
+  // 🔹 입력 값 상태
   const [destination, setDestination] = useState("");
-  const [departureDate, setDepartureDate] = useState("");
-  const [returnDate, setReturnDate] = useState("");
+
+  const [departureDate, setDepartureDate] = useState<Date | undefined>();
+  const [returnDate, setReturnDate] = useState<Date | undefined>();
+
+  const [isDepartureOpen, setIsDepartureOpen] = useState(false);
+  const [isReturnOpen, setIsReturnOpen] = useState(false);
+
   const [people, setPeople] = useState("2명");
   const [budgetLevel, setBudgetLevel] = useState("스탠다드");
 
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
 
-  const [budget, setBudget] = useState(1000000); // ₩
-  const [directFlightOnly, setDirectFlightOnly] = useState(false);
-  const [minTemp, setMinTemp] = useState(15);
-  const [maxTemp, setMaxTemp] = useState(28);
-  const [maxRainChance, setMaxRainChance] = useState(50);
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
-  const [selectedAccommodations, setSelectedAccommodations] = useState<
-    string[]
-  >([]);
+  // 🔹 여행 기간 계산 (출발일/귀국일이 모두 있고 순서가 올바를 때만)
+  let tripNights: number | null = null;
+  let tripDays: number | null = null;
 
-  const toggleTheme = (value: string) => {
-    setSelectedThemes((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    );
-  };
+  if (departureDate && returnDate && !isAfter(departureDate, returnDate)) {
+    const diff = differenceInCalendarDays(returnDate, departureDate);
+    if (diff >= 0) {
+      tripNights = diff;
+      tripDays = diff + 1;
+    }
+  }
 
-  const toggleAccommodation = (value: string) => {
-    setSelectedAccommodations((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    );
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setDateError(null);
+
+    if (!departureDate || !returnDate) {
+      setDateError("출발일과 귀국일을 모두 선택해 주세요.");
+      return;
+    }
+
+    if (isAfter(departureDate, returnDate)) {
+      setDateError("귀국일은 출발일 이후여야 합니다.");
+      return;
+    }
 
     const params = new URLSearchParams();
 
-    if (destination) params.set("destination", destination);
-    if (departureDate) params.set("departureDate", departureDate);
-    if (returnDate) params.set("returnDate", returnDate);
-    if (people) params.set("people", people);
-    if (budgetLevel) params.set("budgetLevel", budgetLevel);
-
-    // 고급 필터 값도 쿼리에 포함
-    params.set("budget", String(budget));
-    params.set("directFlightOnly", String(directFlightOnly));
-    params.set("minTemp", String(minTemp));
-    params.set("maxTemp", String(maxTemp));
-    params.set("maxRainChance", String(maxRainChance));
-
-    if (selectedThemes.length > 0) {
-      params.set("themes", selectedThemes.join(","));
+    // 🔹 여행지/키워드 (선택)
+    if (destination.trim()) {
+      params.set("destination", destination.trim());
     }
-    if (selectedAccommodations.length > 0) {
-      params.set("accommodations", selectedAccommodations.join(","));
+
+    // 🔹 날짜 (필수)
+    params.set("departureDate", format(departureDate, "yyyy-MM-dd"));
+    params.set("returnDate", format(returnDate, "yyyy-MM-dd"));
+
+    if (tripNights !== null && tripNights >= 0) {
+      params.set("tripNights", String(tripNights));
     }
+
+    // 🔹 인원 / 예산 등급 (필수)
+    params.set("people", people);
+    params.set("budgetLevel", budgetLevel);
 
     router.push(`/results?${params.toString()}`);
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-white">
       {/* 상단 네비게이션 */}
       <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
@@ -136,7 +140,7 @@ export default function HomePage() {
           {/* 히어로 텍스트 */}
           <div className="mb-8 md:mb-10">
             <h1 className="text-2xl font-extrabold leading-tight text-gray-900 md:text-4xl lg:text-5xl">
-              여행의 시작, 맞춤형 플랜을 경험하세
+              테스트용, 맞춤형 플랜을 경험하세
               <br className="hidden md:block" />
               <span>요.</span>
             </h1>
@@ -148,61 +152,120 @@ export default function HomePage() {
           {/* 검색 카드 */}
           <form
             onSubmit={handleSubmit}
-            className="w-full max-w-4xl rounded-3xl bg-white/90 p-4 shadow-[0_24px_60px_rgba(123,104,238,0.18)] backdrop-blur md:p-6"
+            className="relative w-full max-w-4xl rounded-3xl bg-white/90 p-4 shadow-[0_24px_60px_rgba(123,104,238,0.18)] md:p-6"
           >
-            {/* 여행지 입력 */}
+            {/* 여행지/키워드 입력 (선택) */}
             <div className="mb-4 space-y-2 text-left">
               <div className="flex items-center gap-2 text-xs font-semibold text-gray-700 md:text-sm">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-[11px]">
                   🌐
                 </span>
-                <span>여행지</span>
+                <span>여행지 또는 키워드 (선택)</span>
               </div>
               <input
                 type="text"
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
-                placeholder="도시 또는 국가를 입력하세요 (예: 파리, 일본)"
+                placeholder="도시명 또는 관심사를 입력하세요 (예: 파리, 온천, 야시장, 유럽 감성)"
                 className="w-full rounded-2xl border border-transparent bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
               />
+              <p className="text-[11px] text-gray-400 md:text-xs">
+                입력하지 않으면 날짜·인원·예산에 맞는 여행지를 자동으로
+                추천해 드립니다.
+              </p>
             </div>
 
+            {/* 날짜 관련 에러 메시지 */}
+            {dateError && (
+              <p className="mb-2 text-left text-[11px] text-red-500 md:text-xs">
+                {dateError}
+              </p>
+            )}
+
             {/* 날짜 / 인원 / 예산 등급 */}
-            <div className="mb-4 grid gap-3 text-left md:grid-cols-4">
+            <div className="mb-2 grid gap-3 text-left md:grid-cols-4">
               {/* 출발일 */}
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1 text-xs font-medium text-gray-600">
                   <span>📅</span>
-                  <span>출발일</span>
+                  <span>출발일 (필수)</span>
                 </label>
-                <input
-                  type="data"
-                  value={departureDate}
-                  onChange={(e) => setDepartureDate(e.target.value)}
-                  placeholder="년-월-일"
-                  className="w-full rounded-2xl border border-transparent bg-gray-50 px-3 py-2.5 text-xs md:text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
-                />
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    readOnly
+                    onClick={() => {
+                      setIsDepartureOpen((v) => !v);
+                      setIsReturnOpen(false);
+                    }}
+                    value={
+                      departureDate
+                        ? format(departureDate, "yyyy-MM-dd")
+                        : ""
+                    }
+                    placeholder="년-월-일"
+                    className="w-full cursor-pointer rounded-2xl border border-transparent bg-gray-50 px-3 py-2.5 text-xs md:text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
+                  />
+
+                  {isDepartureOpen && (
+                    <div className="absolute left-0 z-20 mt-2 w-[260px] rounded-2xl border border-gray-100 bg-white p-3 shadow-lg">
+                      <DayPicker
+                        mode="single"
+                        locale={ko}
+                        selected={departureDate}
+                        onSelect={(date) => {
+                          setDepartureDate(date ?? undefined);
+                          setIsDepartureOpen(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* 귀국일 */}
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1 text-xs font-medium text-gray-600">
                   <span>📅</span>
-                  <span>귀국일</span>
+                  <span>귀국일 (필수)</span>
                 </label>
-                <input
-                  type="data"
-                  value={returnDate}
-                  onChange={(e) => setReturnDate(e.target.value)}
-                  placeholder="년-월-일"
-                  className="w-full rounded-2xl border border-transparent bg-gray-50 px-3 py-2.5 text-xs md:text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
-                />
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    readOnly
+                    onClick={() => {
+                      setIsReturnOpen((v) => !v);
+                      setIsDepartureOpen(false);
+                    }}
+                    value={
+                      returnDate ? format(returnDate, "yyyy-MM-dd") : ""
+                    }
+                    placeholder="년-월-일"
+                    className="w-full cursor-pointer rounded-2xl border border-transparent bg-gray-50 px-3 py-2.5 text-xs md:text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
+                  />
+
+                  {isReturnOpen && (
+                    <div className="absolute left-0 z-20 mt-2 w-[260px] rounded-2xl border border-gray-100 bg-white p-3 shadow-lg">
+                      <DayPicker
+                        mode="single"
+                        locale={ko}
+                        selected={returnDate}
+                        onSelect={(date) => {
+                          setReturnDate(date ?? undefined);
+                          setIsReturnOpen(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* 인원 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-600">
-                  인원
+                  인원 (필수)
                 </label>
                 <div className="relative">
                   <select
@@ -223,7 +286,7 @@ export default function HomePage() {
               {/* 예산 등급 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-gray-600">
-                  예산 등급
+                  예산 등급 (필수)
                 </label>
                 <div className="relative">
                   <select
@@ -242,18 +305,25 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 고급 필터 열기 */}
-            <button
-              type="button"
-              onClick={() => setIsAdvancedOpen(true)}
-              className="mb-4 flex w-full items-center justify-between rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-2.5 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-2">
-                <span>🔍</span>
-                <span>고급 필터 열기</span>
-              </div>
-              <span className="text-[11px] text-gray-400">옵션 설정</span>
-            </button>
+            {/* 여행 기간 표시 */}
+            <div className="mb-4 text-left">
+              {tripNights !== null && tripDays !== null ? (
+                <p className="text-[11px] text-gray-600 md:text-xs">
+                  여행 기간:{" "}
+                  <span className="font-medium text-gray-900">
+                    {tripNights}박 {tripDays}일
+                  </span>{" "}
+                  ·{" "}
+                  {departureDate && format(departureDate, "M월 d일")} ~{" "}
+                  {returnDate && format(returnDate, "M월 d일")}
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 md:text-xs">
+                  출발일과 귀국일을 선택하면 자동으로 여행 기간을 계산해
+                  드립니다.
+                </p>
+              )}
+            </div>
 
             {/* 검색 버튼 */}
             <button
@@ -273,204 +343,6 @@ export default function HomePage() {
       >
         💬
       </button>
-
-      {/* 고급 필터 모달 */}
-      {isAdvancedOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl md:p-6">
-            {/* 헤더 */}
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">⚙️</span>
-                  <h2 className="text-base font-semibold text-gray-900">
-                    고급 필터
-                  </h2>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  원하는 여행 스타일 선택
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAdvancedOpen(false)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-5 text-sm text-gray-800">
-              {/* 예산 */}
-              <div>
-                <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-                  <span>예산</span>
-                  <span className="text-[#6f6bff]">
-                    ₩{budget.toLocaleString()}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={200000}
-                  max={3000000}
-                  step={100000}
-                  value={budget}
-                  onChange={(e) => setBudget(Number(e.target.value))}
-                  className="w-full accent-[#6f6bff]"
-                />
-              </div>
-
-              {/* 직항만 */}
-              <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
-                <div>
-                  <p className="text-xs font-medium text-gray-700">직항만</p>
-                  <p className="mt-0.5 text-[11px] text-gray-500">
-                    직항 항공편이 있는 목적지만 필터링
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDirectFlightOnly((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                    directFlightOnly ? "bg-[#6f6bff]" : "bg-gray-300"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                      directFlightOnly ? "translate-x-5" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* 온도 범위 */}
-              <div>
-                <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-                  <span>온도 범위</span>
-                  <span>
-                    {minTemp}℃ - {maxTemp}℃
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <input
-                    type="range"
-                    min={-10}
-                    max={40}
-                    value={minTemp}
-                    onChange={(e) =>
-                      setMinTemp(
-                        Math.min(Number(e.target.value), maxTemp - 1)
-                      )
-                    }
-                    className="w-full accent-[#6f6bff]"
-                  />
-                  <input
-                    type="range"
-                    min={-10}
-                    max={40}
-                    value={maxTemp}
-                    onChange={(e) =>
-                      setMaxTemp(
-                        Math.max(Number(e.target.value), minTemp + 1)
-                      )
-                    }
-                    className="w-full accent-[#6f6bff]"
-                  />
-                </div>
-              </div>
-
-              {/* 최대 강수 확률 */}
-              <div>
-                <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-600">
-                  <span>최대 강수 확률</span>
-                  <span>{maxRainChance}%</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={maxRainChance}
-                  onChange={(e) => setMaxRainChance(Number(e.target.value))}
-                  className="w-full accent-[#6f6bff]"
-                />
-              </div>
-
-              {/* 여행 테마 */}
-              <div>
-                <p className="text-xs font-medium text-gray-700">여행 테마</p>
-                <p className="mb-2 mt-0.5 text-[11px] text-gray-500">
-                  원하는 여행 스타일 선택
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {THEME_OPTIONS.map((theme) => {
-                    const active = selectedThemes.includes(theme);
-                    return (
-                      <button
-                        key={theme}
-                        type="button"
-                        onClick={() => toggleTheme(theme)}
-                        className={`rounded-2xl border px-3 py-2 text-xs font-medium transition ${
-                          active
-                            ? "border-transparent bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] text-white shadow-sm"
-                            : "border-gray-200 bg-white text-gray-700 hover:border-[#c0b5ff]"
-                        }`}
-                      >
-                        {theme}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 숙소 유형 */}
-              <div>
-                <p className="text-xs font-medium text-gray-700">숙소 유형</p>
-                <p className="mb-2 mt-0.5 text-[11px] text-gray-500">
-                  선호하는 숙소 타입 선택
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {ACCOMMODATION_OPTIONS.map((type) => {
-                    const active = selectedAccommodations.includes(type);
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => toggleAccommodation(type)}
-                        className={`rounded-2xl border px-3 py-2 text-xs font-medium transition ${
-                          active
-                            ? "border-transparent bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] text-white shadow-sm"
-                            : "border-gray-200 bg-white text-gray-700 hover:border-[#c0b5ff]"
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* 하단 버튼 */}
-            <div className="mt-6 flex justify-end gap-2 text-xs md:text-sm">
-              <button
-                type="button"
-                onClick={() => setIsAdvancedOpen(false)}
-                className="rounded-2xl border border-gray-200 px-4 py-2 font-medium text-gray-600 hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAdvancedOpen(false)}
-                className="rounded-2xl bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-4 py-2 font-semibold text-white shadow-sm hover:opacity-95"
-              >
-                고급 필터 닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
