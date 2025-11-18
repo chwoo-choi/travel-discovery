@@ -1,383 +1,375 @@
 // app/results/page.tsx
 import Link from "next/link";
+import { format, differenceInCalendarDays } from "date-fns";
+import { ko } from "date-fns/locale";
 
-type SearchParams = {
-  [key: string]: string | string[] | undefined;
+type ResultsSearchParams = {
+  departureDate?: string;
+  returnDate?: string;
+  tripNights?: string;
+  people?: string;
+  budgetLevel?: string;
+  destination?: string;
 };
 
 type ResultsPageProps = {
-  searchParams: SearchParams;
+  searchParams: ResultsSearchParams;
 };
 
-function normalizeParam(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return value[0] ?? "";
-  return value ?? "";
-}
+type CitySummary = {
+  id: string;
+  name: string;
+  country: string;
+  description: string;
+  rating: number;
+  reviewCount: number;
+  minFlightPrice: number;
+  minStayPricePerNight: number;
+  tags: string[];
+};
 
-function parseNumber(value: string | string[] | undefined): number | null {
-  const raw = normalizeParam(value);
-  if (!raw) return null;
-  const num = Number(raw);
-  return Number.isNaN(num) ? null : num;
-}
+const MOCK_CITIES: CitySummary[] = [
+  {
+    id: "seoul",
+    name: "서울",
+    country: "대한민국",
+    description: "전통과 현대가 공존하는 야경·맛집·쇼핑의 도시",
+    rating: 4.8,
+    reviewCount: 12847,
+    minFlightPrice: 150_000,
+    minStayPricePerNight: 80_000,
+    tags: ["도시", "야경", "맛집", "쇼핑"],
+  },
+  {
+    id: "tokyo",
+    name: "도쿄",
+    country: "일본",
+    description: "미식, 쇼핑, 디즈니까지 한 번에 즐길 수 있는 여행지",
+    rating: 4.7,
+    reviewCount: 21540,
+    minFlightPrice: 180_000,
+    minStayPricePerNight: 90_000,
+    tags: ["미식", "도시", "쇼핑", "가족"],
+  },
+  {
+    id: "bangkok",
+    name: "방콕",
+    country: "태국",
+    description: "합리적인 물가와 휴양·야시장·마사지가 함께하는 도시",
+    rating: 4.6,
+    reviewCount: 17320,
+    minFlightPrice: 220_000,
+    minStayPricePerNight: 60_000,
+    tags: ["휴양", "야시장", "가성비", "마사지"],
+  },
+];
 
-function parseBoolean(value: string | string[] | undefined): boolean {
-  return normalizeParam(value) === "true";
-}
-
-function parseList(value: string | string[] | undefined): string[] {
-  const raw = normalizeParam(value);
-  if (!raw) return [];
-  return raw.split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function TopNav() {
-  return (
-    <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
-        {/* 로고 */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] shadow-md">
-            <span className="text-sm text-white">✈️</span>
-          </div>
-          <span className="text-sm font-semibold text-gray-800 md:text-base">
-            스마트 트래블 플래너
-          </span>
-        </Link>
-
-        {/* 중앙 메뉴 */}
-        <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
-          <Link
-            href="/"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>🏠</span>
-            <span>홈</span>
-          </Link>
-          <Link
-            href="/bookmark"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>🔖</span>
-            <span>북마크</span>
-          </Link>
-          <Link
-            href="/settings"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>⚙️</span>
-            <span>설정</span>
-          </Link>
-        </div>
-
-        {/* 우측 버튼 */}
-        <div className="flex items-center gap-2 text-xs md:text-sm">
-          <Link
-            href="/login"
-            className="rounded-full px-3 py-1.5 font-medium text-gray-700 hover:bg-white"
-          >
-            로그인
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-4 py-1.5 font-semibold text-white shadow-md shadow-[#7a6bff33] hover:opacity-95"
-          >
-            회원가입
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
+function parseDate(value?: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
 }
 
 export default function ResultsPage({ searchParams }: ResultsPageProps) {
-  const destination = normalizeParam(searchParams.destination);
-  const departureDate = normalizeParam(searchParams.departureDate);
-  const returnDate = normalizeParam(searchParams.returnDate);
-  const people = normalizeParam(searchParams.people);
-  const budgetLevel = normalizeParam(searchParams.budgetLevel);
+  const {
+    departureDate: departureParam,
+    returnDate: returnParam,
+    tripNights: tripNightsParam,
+    people: peopleParam,
+    budgetLevel: budgetLevelParam,
+    destination: destinationParam,
+  } = searchParams;
 
-  const budget = parseNumber(searchParams.budget);
-  const directFlightOnly = parseBoolean(searchParams.directFlightOnly);
-  const minTemp = parseNumber(searchParams.minTemp);
-  const maxTemp = parseNumber(searchParams.maxTemp);
-  const maxRainChance = parseNumber(searchParams.maxRainChance);
+  const destination = destinationParam?.trim() ?? "";
 
-  const themes = parseList(searchParams.themes);
-  const accommodations = parseList(searchParams.accommodations);
+  const departureDate = parseDate(departureParam);
+  const returnDate = parseDate(returnParam);
 
-  const hasSearchInput =
-    destination ||
-    departureDate ||
-    returnDate ||
-    people ||
-    budgetLevel ||
-    budget !== null;
+  // 여행 기간 계산
+  let tripNights: number | null = null;
+  if (tripNightsParam) {
+    const n = Number(tripNightsParam);
+    if (!Number.isNaN(n) && n >= 0) {
+      tripNights = n;
+    }
+  }
+  if (
+    tripNights === null &&
+    departureDate &&
+    returnDate &&
+    differenceInCalendarDays(returnDate, departureDate) >= 0
+  ) {
+    tripNights = differenceInCalendarDays(returnDate, departureDate);
+  }
+
+  const tripDays = tripNights !== null ? tripNights + 1 : null;
+
+  const hasDates = !!departureDate && !!returnDate;
+  const hasDestination = destination.length > 0;
+
+  const peopleLabel = peopleParam ?? "2명";
+  const budgetLevelLabel = budgetLevelParam ?? "스탠다드";
+
+  // 상단 타이틀
+  let title = "여행지 추천 결과";
+  if (hasDestination) {
+    title = `"${destination}"에 대한 여행지 추천 결과`;
+  } else if (hasDates) {
+    title = "선택하신 조건에 맞는 여행지 추천 결과";
+  }
+
+  // 조건 요약 배지들
+  const conditionChips: string[] = [];
+
+  if (hasDates && departureDate && returnDate) {
+    const dateLabel = `${format(departureDate, "M월 d일", { locale: ko })} ~ ${format(
+      returnDate,
+      "M월 d일",
+      { locale: ko },
+    )}`;
+    if (tripNights !== null && tripDays !== null) {
+      conditionChips.push(`${dateLabel} · ${tripNights}박 ${tripDays}일`);
+    } else {
+      conditionChips.push(dateLabel);
+    }
+  }
+
+  conditionChips.push(`인원: ${peopleLabel}`);
+  conditionChips.push(`예산 등급: ${budgetLevelLabel}`);
+
+  if (hasDestination) {
+    conditionChips.push(`키워드: ${destination}`);
+  } else {
+    conditionChips.push("키워드 없음 (조건 기반 자동 추천)");
+  }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <TopNav />
+    <div className="flex min-h-screen flex-col bg-white">
+      {/* 상단 네비게이션 (홈과 톤 맞춤) */}
+      <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
+          {/* 로고 */}
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] shadow-md">
+              <span className="text-sm text-white">✈️</span>
+            </div>
+            <span className="text-sm font-semibold text-gray-800 md:text-base">
+              스마트 트래블 플래너
+            </span>
+          </Link>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-16 pt-8 md:pt-10">
-        {/* 제목 영역 */}
-        <header className="mb-6 md:mb-8">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-indigo-500">
-            맞춤형 여행 추천 결과
-          </p>
-          <h1 className="text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
-            선택하신 조건에 맞는 여행지를 찾아봤어요.
-          </h1>
-          <p className="mt-2 text-xs text-gray-500 md:text-sm">
-            홈 화면에서 입력한 날짜·인원·예산·여행 테마를 바탕으로 추천
-            결과가 표시됩니다.
-          </p>
-        </header>
-
-        {/* 검색 조건 요약 카드 */}
-        <section className="mb-8 rounded-3xl bg-white/90 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.16)] backdrop-blur md:p-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-gray-800 md:text-base">
-              검색 조건 요약
-            </h2>
+          {/* 중앙 메뉴 */}
+          <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
             <Link
               href="/"
-              className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
             >
-              조건 다시 설정하기
+              <span>🏠</span>
+              <span>홈</span>
+            </Link>
+            <Link
+              href="/bookmark"
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
+            >
+              <span>🔖</span>
+              <span>북마크</span>
+            </Link>
+            <Link
+              href="/settings"
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
+            >
+              <span>⚙️</span>
+              <span>설정</span>
             </Link>
           </div>
 
-          {hasSearchInput ? (
-            <div className="grid gap-3 text-xs text-gray-700 md:grid-cols-2 md:text-sm">
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-gray-500 md:text-xs">
-                  여행지
-                </p>
-                <p className="rounded-2xl bg-gray-50 px-3 py-2">
-                  {destination || "지정된 여행지가 없습니다."}
-                </p>
-              </div>
+          {/* 우측 버튼 */}
+          <div className="flex items-center gap-2 text-xs md:text-sm">
+            <Link
+              href="/login"
+              className="rounded-full px-3 py-1.5 font-medium text-gray-700 hover:bg-white"
+            >
+              로그인
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-full bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-4 py-1.5 font-semibold text-white shadow-md shadow-[#7a6bff33] hover:opacity-95"
+            >
+              회원가입
+            </Link>
+          </div>
+        </div>
+      </nav>
 
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-gray-500 md:text-xs">
-                  여행 기간
-                </p>
-                <p className="rounded-2xl bg-gray-50 px-3 py-2">
-                  {departureDate || returnDate
-                    ? `${departureDate || "출발일 미입력"} ~ ${
-                        returnDate || "귀국일 미입력"
-                      }`
-                    : "여행 기간 정보가 없습니다."}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-gray-500 md:text-xs">
-                  인원 / 예산 등급
-                </p>
-                <p className="rounded-2xl bg-gray-50 px-3 py-2">
-                  {(people || "인원 미입력") +
-                    " · " +
-                    (budgetLevel || "예산 등급 미입력")}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-gray-500 md:text-xs">
-                  세부 예산
-                </p>
-                <p className="rounded-2xl bg-gray-50 px-3 py-2">
-                  {budget !== null
-                    ? `약 ₩${budget.toLocaleString()} 기준`
-                    : "세부 예산 정보가 없습니다."}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-gray-500 md:text-xs">
-                  직항 여부 / 날씨 조건
-                </p>
-                <p className="rounded-2xl bg-gray-50 px-3 py-2">
-                  {directFlightOnly ? "직항 노선만" : "직항/경유 모두 허용"}
-                  {" · "}
-                  {minTemp !== null && maxTemp !== null
-                    ? `${minTemp}℃ ~ ${maxTemp}℃`
-                    : "온도 조건 없음"}
-                  {" · "}
-                  {maxRainChance !== null
-                    ? `최대 강수 확률 ${maxRainChance}%`
-                    : "강수 확률 조건 없음"}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-gray-500 md:text-xs">
-                  여행 테마 / 숙소 유형
-                </p>
-                <p className="rounded-2xl bg-gray-50 px-3 py-2">
-                  {themes.length > 0 ? themes.join(", ") : "선택한 여행 테마 없음"}
-                  {" · "}
-                  {accommodations.length > 0
-                    ? accommodations.join(", ")
-                    : "선호 숙소 유형 없음"}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="rounded-2xl bg-gray-50 px-3 py-2 text-xs text-gray-500 md:text-sm">
-              아직 검색 조건이 제대로 전달되지 않았습니다. 홈 화면에서 여행
-              정보를 입력한 뒤 다시 시도해 주세요.
+      {/* 메인 영역 */}
+      <main className="flex flex-1 justify-center px-4 pb-16 pt-8 md:pt-10">
+        <div className="mx-auto flex w-full max-w-5xl flex-col">
+          {/* 헤더 */}
+          <header className="mb-6 md:mb-8">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-indigo-500">
+              결과
             </p>
-          )}
-        </section>
+            <h1 className="text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
+              {title}
+            </h1>
 
-        {/* 추천 결과 리스트 (지금은 UI 샘플용 더미 카드) */}
-        <section className="flex-1">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-800 md:text-base">
-              추천 여행지
-            </h2>
-            <span className="text-xs text-gray-400">
-              ※ 현재는 UI 테스트용 더미 데이터입니다.
-            </span>
-          </div>
+            {/* 서브 설명 */}
+            <p className="mt-2 text-xs text-gray-500 md:text-sm">
+              홈에서 선택하신{" "}
+              <span className="font-medium text-gray-800">
+                날짜 · 인원 · 예산{hasDestination ? " · 키워드" : ""}
+              </span>{" "}
+              조건을 바탕으로, 여행지 후보를 정리한 화면입니다. 실제 추천
+              알고리즘과 가격 데이터는 추후 MySQL · API 연동 시점에
+              연결됩니다.
+            </p>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {/* 카드 1 */}
-            <article className="flex h-full flex-col rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.14)]">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    도쿄
-                  </h3>
-                  <p className="text-[11px] text-gray-500">일본 · 쇼핑 & 미식</p>
-                </div>
-                <span className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-500">
-                  추천도 92점
+            {/* 조건 요약 배지 */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {conditionChips.map((chip) => (
+                <span
+                  key={chip}
+                  className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1 text-[11px] font-medium text-gray-700 ring-1 ring-gray-100"
+                >
+                  {chip}
                 </span>
-              </div>
-              <p className="mb-3 text-[11px] text-gray-500">
-                대중교통이 편리하고, 단거리 노선 직항이 많아 주말 여행으로
-                적합해요.
+              ))}
+            </div>
+
+            {/* 날짜가 없을 때 안내 (직접 URL 접근 등) */}
+            {!hasDates && (
+              <p className="mt-3 text-[11px] text-gray-400 md:text-xs">
+                출발일과 귀국일이 없으면 정확한 추천이 어려울 수 있습니다.
+                홈 화면에서 날짜를 선택한 뒤 다시 검색해 주세요.
               </p>
-              <dl className="mb-3 space-y-1 text-[11px] text-gray-600">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예상 기온</dt>
-                  <dd>18℃ ~ 24℃</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">강수 확률</dt>
-                  <dd>30% 내외</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예산 체감</dt>
-                  <dd>{budgetLevel || "스탠다드 기준"}</dd>
-                </div>
-              </dl>
-              <div className="mt-auto flex flex-wrap gap-1">
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #근거리
-                </span>
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #쇼핑
-                </span>
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #맛집
-                </span>
-              </div>
-            </article>
+            )}
+          </header>
 
-            {/* 카드 2 */}
-            <article className="flex h-full flex-col rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.14)]">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    방콕
-                  </h3>
-                  <p className="text-[11px] text-gray-500">
-                    태국 · 휴양 & 야시장
+          {/* 도시 카드 리스트 */}
+          <section className="space-y-4 md:space-y-6">
+            {MOCK_CITIES.map((city) => (
+              <article
+                key={city.id}
+                className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_40px_rgba(123,104,238,0.14)] ring-1 ring-gray-50"
+              >
+                {/* 이미지 영역 (임시 그래디언트) */}
+                <div className="relative h-40 w-full overflow-hidden md:h-48">
+                  <div className="h-full w-full bg-gradient-to-br from-[#6f6bff] via-[#7b6bff] to-[#ba7bff]" />
+                  <div className="absolute inset-0 flex items-end justify-between px-4 pb-3">
+                    <div className="text-left text-white">
+                      <p className="text-xs font-medium text-white/80">
+                        {city.country}
+                      </p>
+                      <h2 className="text-xl font-semibold md:text-2xl">
+                        {city.name}
+                      </h2>
+                    </div>
+                    <div className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-medium text-white backdrop-blur">
+                      ★ {city.rating.toFixed(1)} ·{" "}
+                      {city.reviewCount.toLocaleString()}개 리뷰
+                    </div>
+                  </div>
+                </div>
+
+                {/* 내용 영역 */}
+                <div className="space-y-3 px-4 py-4 md:px-5 md:py-5">
+                  {/* 소개 문구 */}
+                  <p className="text-xs text-gray-600 md:text-sm">
+                    {city.description}
                   </p>
-                </div>
-                <span className="rounded-full bg-purple-50 px-2 py-1 text-[11px] font-semibold text-purple-500">
-                  가성비 좋음
-                </span>
-              </div>
-              <p className="mb-3 text-[11px] text-gray-500">
-                저렴한 물가와 다양한 숙소 옵션으로, 장기 여행이나 가족 여행에
-                적합해요.
-              </p>
-              <dl className="mb-3 space-y-1 text-[11px] text-gray-600">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예상 기온</dt>
-                  <dd>26℃ ~ 32℃</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">강수 확률</dt>
-                  <dd>40% 내외</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예산 체감</dt>
-                  <dd>실속형 ~ 스탠다드</dd>
-                </div>
-              </dl>
-              <div className="mt-auto flex flex-wrap gap-1">
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #휴양
-                </span>
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #야시장
-                </span>
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #스파
-                </span>
-              </div>
-            </article>
 
-            {/* 카드 3 */}
-            <article className="flex h-full flex-col rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.14)]">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    파리
-                  </h3>
-                  <p className="text-[11px] text-gray-500">프랑스 · 예술 & 문화</p>
+                  {/* 태그 */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {city.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center rounded-full bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600 ring-1 ring-gray-100"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* 가격 요약 */}
+                  <div className="grid gap-3 text-xs text-gray-700 md:grid-cols-3 md:text-sm">
+                    <div className="rounded-2xl bg-gray-50 px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-gray-500">
+                        항공권 (왕복 기준)
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 md:text-base">
+                        최저 ₩{city.minFlightPrice.toLocaleString()}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-gray-400">
+                        실제 가격은 날짜 · 항공사에 따라 달라질 수 있습니다.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-gray-50 px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-gray-500">
+                        숙박비 (1박 기준)
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900 md:text-base">
+                        최저 ₩{city.minStayPricePerNight.toLocaleString()}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-gray-400">
+                        평균적인 1박 최저가 수준을 기준으로 보여줍니다.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-gray-50 px-3 py-2.5">
+                      <p className="text-[11px] font-medium text-gray-500">
+                        추천 이유
+                      </p>
+                      <p className="mt-1 text-[11px] text-gray-600 md:text-xs">
+                        현재는 예시 데이터이며, 추후{" "}
+                        <span className="font-medium">
+                          날짜 · 예산 · 관심사
+                        </span>{" "}
+                        조건에 맞는 점수 기반 추천 로직이 연결될 예정입니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 하단 액션 */}
+                  <div className="mt-1 flex items-center justify-between">
+                    <Link
+                      href={`/city/${city.id}`}
+                      className="inline-flex items-center gap-1 rounded-2xl bg-gray-900 px-3 py-2 text-[11px] font-medium text-white hover:bg-gray-800 md:text-xs"
+                    >
+                      상세 정보 보기
+                      <span>→</span>
+                    </Link>
+
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-medium text-gray-700 hover:border-[#c0b5ff] md:text-xs"
+                    >
+                      <span>♡</span>
+                      <span>북마크</span>
+                    </button>
+                  </div>
                 </div>
-                <span className="rounded-full bg-pink-50 px-2 py-1 text-[11px] font-semibold text-pink-500">
-                  로망 가득
-                </span>
-              </div>
-              <p className="mb-3 text-[11px] text-gray-500">
-                미술관·박물관 중심의 일정과 카페 투어에 잘 어울리는 도시예요.
-              </p>
-              <dl className="mb-3 space-y-1 text-[11px] text-gray-600">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예상 기온</dt>
-                  <dd>14℃ ~ 22℃</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">강수 확률</dt>
-                  <dd>35% 내외</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예산 체감</dt>
-                  <dd>스탠다드 ~ 프리미엄</dd>
-                </div>
-              </dl>
-              <div className="mt-auto flex flex-wrap gap-1">
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #예술
-                </span>
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #카페투어
-                </span>
-                <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                  #야경
-                </span>
-              </div>
-            </article>
-          </div>
-        </section>
+              </article>
+            ))}
+
+            {/* (예시) 실제 추천 데이터 연결 안내 */}
+            <p className="mt-2 text-[11px] text-gray-400 md:text-xs">
+              ※ 위 도시는 UI와 흐름을 확인하기 위한 예시 데이터입니다.
+              추후에는 MySQL에 저장된 도시/가격/날씨 정보와 연동하여 실제
+              추천 결과가 표시됩니다.
+            </p>
+          </section>
+        </div>
       </main>
+
+      {/* 채팅 플로팅 버튼 (UI만, 홈과 동일) */}
+      <button
+        type="button"
+        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] text-xl text-white shadow-[0_18px_40px_rgba(123,104,238,0.6)]"
+      >
+        💬
+      </button>
     </div>
   );
 }
