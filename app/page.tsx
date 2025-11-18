@@ -140,7 +140,7 @@ export default function HomePage() {
           {/* 히어로 텍스트 */}
           <div className="mb-8 md:mb-10">
             <h1 className="text-2xl font-extrabold leading-tight text-gray-900 md:text-4xl lg:text-5xl">
-              테스트용, 맞춤형 플랜을 경험하세
+              여행의 시작, 맞춤형 플랜을 경험하세
               <br className="hidden md:block" />
               <span>요.</span>
             </h1>
