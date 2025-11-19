@@ -2,91 +2,90 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 
-// JWT payload 형태 (로그인/회원가입/구글 로그인에서 넣어준 필드)
-interface AppJwtPayload extends Omit<jwt.JwtPayload, 'sub'> {
-  sub?: number | string; // 이제 오류 없이 number와 string 모두 사용 가능합니다.
-  email?: string;
-  name?: string;
-}
+type AuthTokenPayload = {
+  sub: string | number;
+  email: string;
+  name?: string | null;
+};
 
-type MeResponse =
-  | {
-      authenticated: true;
-      user: {
-        id: number | string;
-        email: string;
-        name: string;
-      };
-    }
-  | {
-      authenticated: false;
-      user: null;
-      message: string;
-    };
-
-export async function GET(req: NextRequest) {
-  const token = req.cookies.get("token")?.value;
-
-  if (!token) {
-    const body: MeResponse = {
-      authenticated: false,
-      user: null,
-      message: "로그인이 필요합니다.",
-    };
-    return NextResponse.json(body, { status: 401 });
-  }
-
+function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    console.error("JWT_SECRET 환경변수가 설정되어 있지 않습니다.");
-    const body: MeResponse = {
-      authenticated: false,
-      user: null,
-      message:
-        "서버 설정에 문제가 있습니다. 잠시 후 다시 시도해주세요.",
-    };
-    return NextResponse.json(body, { status: 500 });
+    throw new Error("JWT_SECRET 환경 변수가 설정되어 있지 않습니다.");
   }
+  return secret;
+}
 
+export async function GET(req: NextRequest) {
   try {
-    const decoded = jwt.verify(token, secret) as AppJwtPayload;
+    const tokenCookie = req.cookies.get("token");
 
-    const idRaw = decoded.sub;
-    const email = decoded.email;
-    const name = decoded.name;
-
-    if (!email || !name || typeof idRaw === "undefined") {
-      console.error("JWT payload에 필요한 정보가 부족합니다:", decoded);
-      const body: MeResponse = {
-        authenticated: false,
-        user: null,
-        message: "세션 정보가 올바르지 않습니다. 다시 로그인해주세요.",
-      };
-      return NextResponse.json(body, { status: 401 });
+    if (!tokenCookie || !tokenCookie.value) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          user: null,
+          message: "로그인이 필요합니다.",
+        },
+        { status: 401 }
+      );
     }
 
-    const id =
-      typeof idRaw === "string" && /^\d+$/.test(idRaw)
-        ? Number(idRaw)
-        : idRaw;
+    const token = tokenCookie.value;
+    const jwtSecret = getJwtSecret();
 
-    const body: MeResponse = {
-      authenticated: true,
-      user: {
-        id,
-        email,
-        name,
+    let decoded: AuthTokenPayload;
+    try {
+      decoded = jwt.verify(token, jwtSecret) as AuthTokenPayload;
+    } catch {
+      // 토큰 만료 또는 변조 → 동일하게 "로그인이 필요합니다."
+      return NextResponse.json(
+        {
+          authenticated: false,
+          user: null,
+          message: "로그인이 필요합니다.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const userId = decoded.sub;
+    const email = decoded.email;
+    const name = decoded.name ?? null;
+
+    if (!userId || !email) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          user: null,
+          message: "로그인이 필요합니다.",
+        },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        authenticated: true,
+        user: {
+          // number든 string이든 그대로 반환 (프론트에서 string으로만 쓰고 싶으면 거기서 변환)
+          id: userId,
+          email,
+          name,
+        },
       },
-    };
-
-    return NextResponse.json(body, { status: 200 });
-  } catch (error) {
-    console.error("JWT 검증 중 오류:", error);
-    const body: MeResponse = {
-      authenticated: false,
-      user: null,
-      message: "로그인 정보가 만료되었거나 올바르지 않습니다.",
-    };
-    return NextResponse.json(body, { status: 401 });
+      { status: 200 }
+    );
+  } catch {
+    // JWT_SECRET 누락 등 서버 내부 문제
+    return NextResponse.json(
+      {
+        authenticated: false,
+        user: null,
+        message:
+          "인증 정보를 확인하는 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
+      },
+      { status: 500 }
+    );
   }
 }

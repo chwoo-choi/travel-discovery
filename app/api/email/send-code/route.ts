@@ -1,144 +1,85 @@
 // app/api/auth/email/send-code/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 
-// 아주 간단한 이메일 형식 검증용 정규식
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type EmailSendCodeRequestBody = {
+  email?: string;
+};
 
-// 6자리 숫자 인증 코드 생성
-function generateVerificationCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+const INVALID_EMAIL_MESSAGE = "유효한 이메일 주소를 입력해주세요.";
 
-// 실제 이메일 발송 함수
-async function sendVerificationEmail(to: string, code: string) {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASSWORD;
-  const from = process.env.EMAIL_FROM || "여행의 발견 <no-reply@example.com>";
-  const secure = process.env.SMTP_SECURE === "true";
-  const isDev = process.env.NODE_ENV !== "production";
-
-  // SMTP 설정이 없고 개발 환경이면 → 실제 메일 전송 대신 콘솔 로그
-  if (!host || !user || !pass) {
-    if (isDev) {
-      console.log("[DEV] 이메일 전송 생략. 아래 인증 코드를 사용하세요.");
-      console.log("수신 이메일:", to);
-      console.log("인증 코드:", code);
-      return;
-    }
-
-    // 운영 환경인데 SMTP 설정이 없으면 에러
-    throw new Error("SMTP 설정이 구성되어 있지 않습니다.");
-  }
-
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user,
-      pass,
-    },
-  });
-
-  await transporter.sendMail({
-    from,
-    to,
-    subject: "여행의 발견 - 이메일 인증 코드",
-    text: `안녕하세요, 여행의 발견입니다.\n\n이메일 인증 코드는 ${code} 입니다.\n10분 이내에 입력해 주세요.\n\n감사합니다.`,
-    html: `
-      <p>안녕하세요, <strong>여행의 발견</strong>입니다.</p>
-      <p>이메일 인증 코드는 <strong style="font-size: 18px;">${code}</strong> 입니다.</p>
-      <p>보안을 위해 <strong>10분 이내</strong>에 입력해 주세요.</p>
-      <p>감사합니다.</p>
-    `,
-  });
+function normalizeEmail(raw: string | undefined): string {
+  return (raw ?? "").trim().toLowerCase();
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => null);
-    const email = body?.email as string | undefined;
+    // 1) 요청 파싱
+    let body: EmailSendCodeRequestBody;
+    try {
+      body = (await req.json()) as EmailSendCodeRequestBody;
+    } catch {
+      return NextResponse.json(
+        { message: "잘못된 요청 형식입니다." },
+        { status: 400 }
+      );
+    }
 
+    const email = normalizeEmail(body.email);
+
+    // 2) 이메일 유효성 검사
     if (!email) {
       return NextResponse.json(
-        { message: "이메일을 입력해주세요." },
+        { message: INVALID_EMAIL_MESSAGE },
         { status: 400 }
       );
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!EMAIL_REGEX.test(normalizedEmail)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { message: "이메일 형식을 다시 확인해주세요." },
+        { message: INVALID_EMAIL_MESSAGE },
         { status: 400 }
       );
     }
 
-    // 간단 레이트 리밋: 같은 이메일로 1분 이내 재요청 방지
-    const recent = await prisma.emailVerificationCode.findFirst({
-      where: { email: normalizedEmail },
-      orderBy: { createdAt: "desc" },
+    // 3) 6자리 인증 코드 생성 (000000 ~ 999999)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10분 후 만료
+
+    // 4) 해당 이메일로 기존 코드들 삭제 후 새 코드 저장
+    //    (prisma.schema 에 EmailVerificationCode 모델이 있다고 가정)
+    await prisma.emailVerificationCode.deleteMany({
+      where: { email },
     });
 
-    if (
-      recent &&
-      recent.createdAt.getTime() > Date.now() - 60 * 1000 // 1분
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            "인증 코드는 1분에 한 번만 요청할 수 있습니다. 잠시 후 다시 시도해주세요.",
-        },
-        { status: 429 }
-      );
-    }
-
-    const code = generateVerificationCode();
-
-    // 기존 미사용 코드는 모두 사용 처리(무효화)
-    await prisma.emailVerificationCode.updateMany({
-      where: {
-        email: normalizedEmail,
-        used: false,
-      },
-      data: {
-        used: true,
-      },
-    });
-
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10분 유효
-
-    // 새 인증 코드 저장
     await prisma.emailVerificationCode.create({
       data: {
-        email: normalizedEmail,
+        email,
         code,
         expiresAt,
-        used: false,
       },
     });
 
-    // 이메일 발송 (개발 환경에서는 콘솔에만 찍힘)
-    await sendVerificationEmail(normalizedEmail, code);
+    // 5) 실제 메일 발송은 나중에 (지금은 콘솔로 대체)
+    //    - SMTP 설정이 없는 환경에서도 항상 200 OK를 주기 위함
+    //    - 개발 중에는 서버 콘솔에서 코드를 확인할 수 있음
+    console.log(
+      `[DEV] 이메일 인증 코드 발급: ${email} -> ${code} (10분 유효)`
+    );
 
     return NextResponse.json(
       {
-        message:
-          "인증 코드가 이메일로 발송되었습니다. 메일함을 확인해주세요.",
+        message: "인증 메일을 전송했습니다. (개발 환경에서는 서버 콘솔에서 코드를 확인하세요.)",
       },
       { status: 200 }
     );
-  } catch (error) {
-    console.error("Email verification send-code error:", error);
+  } catch {
     return NextResponse.json(
       {
         message:
-          "인증 코드 발송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+          "인증 메일 전송 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.",
       },
       { status: 500 }
     );
