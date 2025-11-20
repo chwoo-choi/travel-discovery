@@ -43,3 +43,13 @@ model EmailVerificationCode {
 
   @@unique([email, code])
 }
+
+// 이메일 인증번호(6자리)를 임시로 저장하는 테이블
+model VerificationToken {
+  identifier String   // 인증할 이메일 주소 (예: you@example.com)
+  token      String   // 발송된 6자리 인증번호 (예: 123456)
+  expires    DateTime // 인증번호 만료 시간 (5분 뒤)
+
+  // 이메일과 토큰의 조합은 유일해야 함 (중복 방지)
+  @@unique([identifier, token])
+}

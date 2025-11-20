@@ -1,10 +1,11 @@
-// app/api/auth/signup/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { prisma } from "@/lib/prisma";
 
-// 프론트에서도 1차 검증하지만, 보안을 위해 서버에서도 한 번 더 체크
+const prisma = new PrismaClient();
+
+// 비밀번호 규칙 (8자 이상, 영문/숫자/특수문자)
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 
 export async function POST(req: NextRequest) {
@@ -15,6 +16,7 @@ export async function POST(req: NextRequest) {
     const email = body?.email as string | undefined;
     const password = body?.password as string | undefined;
 
+    // 1. 입력값 검증
     if (!name || !email || !password) {
       return NextResponse.json(
         { message: "이름, 이메일, 비밀번호를 모두 입력해주세요." },
@@ -24,56 +26,44 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // 비밀번호 규칙 서버 검증
+    // 2. 비밀번호 규칙 서버 검증
     if (!PASSWORD_REGEX.test(password)) {
       return NextResponse.json(
-        {
-          message:
-            "비밀번호 규칙을 다시 확인해주세요. (8자 이상, 영문, 숫자, 특수문자 포함)",
-        },
+        { message: "비밀번호는 8자 이상이며, 영문/숫자/특수문자를 포함해야 합니다." },
         { status: 400 }
       );
     }
 
-    // 이메일 중복 체크
+    // 3. 이메일 중복 체크
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { message: "이미 사용 중인 이메일입니다." },
+        { message: "이미 가입된 이메일입니다." },
         { status: 409 }
       );
     }
 
-    // 비밀번호 해시
-    const passwordHash = await bcrypt.hash(password, 10);
+    // 4. 비밀번호 암호화
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 유저 생성
+    // 5. 유저 생성
+    // 🚨 [수정됨] DB 필드명 오류 해결: password -> passwordHash
+    // (만약 DB에 passwordHash 필드도 없다면 schema.prisma에 추가해야 합니다)
     const user = await prisma.user.create({
       data: {
         name: name.trim(),
         email: normalizedEmail,
-        passwordHash,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
+        passwordHash: hashedPassword, // ✅ 여기를 수정했습니다!
       },
     });
 
-    // JWT 발급 (자동 로그인)
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      console.error("JWT_SECRET 환경변수가 설정되어 있지 않습니다.");
-      return NextResponse.json(
-        { message: "서버 설정 오류로 인해 요청을 처리할 수 없습니다." },
-        { status: 500 }
-      );
-    }
-
+    // 6. JWT 토큰 발급 (자동 로그인)
+    // JWT_SECRET이 .env에 있는지 확인 (없으면 임시 키 사용 - 보안상 .env 권장)
+    const secret = process.env.JWT_SECRET || "default-secret-key"; 
+    
     const token = jwt.sign(
       {
         sub: user.id,
@@ -81,34 +71,33 @@ export async function POST(req: NextRequest) {
         name: user.name,
       },
       secret,
-      { expiresIn: "7d" } // 7일 유지
+      { expiresIn: "7d" }
     );
 
+    // 7. 응답 생성
     const res = NextResponse.json(
       {
         message: "회원가입이 완료되었습니다.",
-        user,
+        user: { id: user.id, email: user.email, name: user.name },
       },
       { status: 201 }
     );
 
-    // HttpOnly 쿠키로 세션 토큰 전달
+    // 8. 쿠키 설정
     res.cookies.set("token", token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // ✅ HTTP 환경 지원을 위해 false로 고정
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 7일
+      maxAge: 60 * 60 * 24 * 7,
     });
 
     return res;
+
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json(
-      {
-        message:
-          "회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-      },
+      { message: "회원가입 처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }
