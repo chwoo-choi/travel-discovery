@@ -1,23 +1,18 @@
-// app/api/auth/logout/route.ts
 import { NextResponse } from "next/server";
 
 export async function POST() {
-  // token 쿠키를 삭제하기 위해 maxAge=0으로 재설정
-  const res = NextResponse.json(
-    {
-      message: "로그아웃되었습니다.",
-    },
-    { status: 200 }
-  );
+  const response = NextResponse.json({ message: "Logged out successfully" });
 
-  res.cookies.set("token", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+  // 🚨 핵심 수정: secure: false로 설정해야 http 환경에서 삭제가 됨
+  response.cookies.set("token", "", {
     path: "/",
-    maxAge: 0, // 즉시 만료
+    expires: new Date(0), // 즉시 만료
+    maxAge: 0,
+    httpOnly: true,
+    secure: false, // ✅ DuckDNS(http) 환경에 맞춤
+    sameSite: "lax",
   });
 
-  return res;
+  return response;
 }
 

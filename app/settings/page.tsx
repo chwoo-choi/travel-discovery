@@ -1,15 +1,39 @@
-import Link from "next/link";
-import { TopNavAuth } from "@/components/TopNavAuth"; // ✅ 1. 새 네비게이션 불러오기
+"use client";
 
-// 🗑️ [삭제됨] 기존 function TopNav() {...} 코드는 이제 필요 없어서 지웠습니다.
+import Link from "next/link";
+import { TopNavAuth } from "@/components/TopNavAuth";
+import { useEffect, useState } from "react"; // ✅ 1. 상태 관리 훅 추가
 
 export default function SettingsPage() {
+  // ✅ 2. 로그인 상태를 저장할 변수 (기본값: 로그인 안 됨)
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  // ✅ 3. 페이지가 켜지자마자 로그인 여부 확인 (API 호출)
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          // 인증되었다면 상태 업데이트 -> 화면이 바뀜
+          if (data.authenticated) {
+            setIsLoggedIn(true);
+            setUserEmail(data.user?.email || "사용자");
+          }
+        }
+      } catch (error) {
+        console.error("인증 확인 실패", error);
+      }
+    }
+    checkAuth();
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col bg-white">
       
-      {/* 👇👇👇 [수정된 부분] 기존 <TopNav /> 대신 이걸로 교체! 👇👇👇 */}
+      {/* 상단 네비게이션 */}
       <TopNavAuth />
-      {/* 👆👆👆 이제 여기서도 로그인 상태가 유지됩니다 */}
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-16 pt-8 md:pt-10">
         {/* 헤더 */}
@@ -201,7 +225,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* 계정 및 안내 */}
+            {/* 계정 및 데이터 (핵심 수정 부분!) */}
             <div className="rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.1)] md:p-5">
               <h2 className="text-sm font-semibold text-gray-900 md:text-base">
                 계정 및 데이터
@@ -211,20 +235,44 @@ export default function SettingsPage() {
                 안전하게 저장될 예정입니다.
               </p>
 
-              <div className="mt-3 space-y-2 text-[11px] text-gray-500">
-                <p>· 현재 버전에서는 설정 값이 실제로 저장되지는 않습니다.</p>
-                <p>
-                  · 추후 MySQL·API 연동이 완료되면, 여기에서 저장/초기화 기능이
-                  활성화됩니다.
-                </p>
-              </div>
-
-              <Link
-                href="/login"
-                className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-gray-900 px-3 py-2 text-[11px] font-medium text-white hover:bg-gray-800"
-              >
-                로그인하러 가기
-              </Link>
+              {/* ✅ 4. 로그인 여부(isLoggedIn)에 따라 내용 다르게 보여주기 */}
+              {isLoggedIn ? (
+                // [CASE 1] 로그인 되었을 때 -> 저장 버튼 & 이메일 표시
+                <div className="mt-4">
+                  <div className="mb-3 rounded-xl bg-indigo-50 p-3">
+                    <p className="text-[11px] font-medium text-indigo-900">
+                      현재 로그인 중:
+                    </p>
+                    <p className="text-xs text-indigo-700">{userEmail}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => alert("설정 값이 저장되었습니다! (데모)")}
+                    className="inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-3 py-2 text-[11px] font-bold text-white shadow-md hover:opacity-90"
+                  >
+                    설정 저장하기
+                  </button>
+                </div>
+              ) : (
+                // [CASE 2] 로그인 안 되었을 때 -> 로그인 버튼 표시 (기존 화면)
+                <>
+                  <div className="mt-3 space-y-2 text-[11px] text-gray-500">
+                    <p>
+                      · 현재 버전에서는 설정 값이 실제로 저장되지는 않습니다.
+                    </p>
+                    <p>
+                      · 추후 MySQL·API 연동이 완료되면, 여기에서 저장/초기화
+                      기능이 활성화됩니다.
+                    </p>
+                  </div>
+                  <Link
+                    href="/login"
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-gray-900 px-3 py-2 text-[11px] font-medium text-white hover:bg-gray-800"
+                  >
+                    로그인하러 가기
+                  </Link>
+                </>
+              )}
             </div>
           </section>
         </div>

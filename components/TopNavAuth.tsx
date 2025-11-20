@@ -1,10 +1,10 @@
 // components/TopNavAuth.tsx
 "use client";
-
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+// 🔹 타입 정의 유지
 type MeResponse = {
   authenticated: boolean;
   user: {
@@ -19,23 +19,29 @@ type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
 export function TopNavAuth() {
   const pathname = usePathname();
-  const router = useRouter();
 
+  // 🔹 상태 변수 유지
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<MeResponse["user"]>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // -----------------------
-  //  /api/auth/me 로 로그인 상태 확인
+  //  [수정됨] 로그인 상태 확인 (캐시 방지 코드 추가)
   // -----------------------
   useEffect(() => {
     let cancelled = false;
 
     async function fetchMe() {
       try {
-        const res = await fetch("/api/auth/me", {
+        // 🚨 핵심 수정: URL 뒤에 시간을 붙여서 매번 새로운 요청으로 인식하게 함
+        const res = await fetch(`/api/auth/me?_t=${Date.now()}`, {
           method: "GET",
           credentials: "include",
+          cache: "no-store",
+          headers: {
+            "Pragma": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+          }
         });
 
         if (!res.ok) {
@@ -70,38 +76,33 @@ export function TopNavAuth() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pathname]); // 페이지 이동할 때마다 체크
 
   // -----------------------
-  //  로그아웃 처리
+  //  [수정됨] 로그아웃 처리 (강력 새로고침)
   // -----------------------
   const handleLogout = async () => {
     if (isLoggingOut) return;
 
     try {
       setIsLoggingOut(true);
-      const res = await fetch("/api/auth/logout", {
+      // 로그아웃 API 호출
+      await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
       });
 
-      // 성공/실패에 상관없이 프론트에서는 상태 초기화
-      setStatus("unauthenticated");
-      setUser(null);
-      router.push("/");
-      router.refresh();
-    } catch {
-      setStatus("unauthenticated");
-      setUser(null);
-      router.push("/");
-      router.refresh();
-    } finally {
-      setIsLoggingOut(false);
+      // 🚨 핵심 수정: 화면을 강제로 새로고침하여 캐시된 로그인 정보를 싹 날림
+      window.location.href = "/"; 
+    } catch (error) {
+      console.error("로그아웃 실패", error);
+      // 에러가 나더라도 일단 홈으로 튕겨냄
+      window.location.href = "/";
     }
   };
 
   // -----------------------
-  //  네비게이션 활성 상태 체크
+  //  UI 및 스타일 (기존 코드 100% 유지)
   // -----------------------
   const isActive = (href: string) => {
     if (href === "/") {
@@ -118,9 +119,6 @@ export function TopNavAuth() {
     baseNavItemClasses +
     " bg-white/80 text-gray-900 shadow-sm shadow-white/40";
 
-  // -----------------------
-  //  사용자 이름/이니셜 표시
-  // -----------------------
   const displayName =
     user?.name && user.name.trim().length > 0
       ? user.name.trim()
@@ -128,9 +126,6 @@ export function TopNavAuth() {
 
   const nameInitial = displayName.charAt(0);
 
-  // -----------------------
-  //  렌더링
-  // -----------------------
   return (
     <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
@@ -148,37 +143,30 @@ export function TopNavAuth() {
         <div className="hidden items-center gap-4 md:flex">
           <Link
             href="/"
-            className={isActive("/")
-              ? activeNavItemClasses
-              : inactiveNavItemClasses}
+            className={isActive("/") ? activeNavItemClasses : inactiveNavItemClasses}
           >
             <span>🏠</span>
             <span>홈</span>
           </Link>
           <Link
             href="/bookmark"
-            className={isActive("/bookmark")
-              ? activeNavItemClasses
-              : inactiveNavItemClasses}
+            className={isActive("/bookmark") ? activeNavItemClasses : inactiveNavItemClasses}
           >
             <span>🔖</span>
             <span>북마크</span>
           </Link>
           <Link
             href="/settings"
-            className={isActive("/settings")
-              ? activeNavItemClasses
-              : inactiveNavItemClasses}
+            className={isActive("/settings") ? activeNavItemClasses : inactiveNavItemClasses}
           >
             <span>⚙️</span>
             <span>설정</span>
           </Link>
         </div>
 
-        {/* 우측 영역: 로그인 전/후 상태에 따라 다르게 렌더링 */}
+        {/* 우측 영역 */}
         <div className="flex items-center gap-2 text-xs md:text-sm">
           {status === "loading" && (
-            // 로딩 중일 때는 살짝 흐린 상태로 기본 버튼 UI를 보여줌
             <>
               <div className="h-8 w-16 rounded-full bg-white/60 md:h-9" />
               <div className="h-8 w-20 rounded-full bg-gradient-to-r from-[#e0ddff] to-[#f0ddff] md:h-9" />
