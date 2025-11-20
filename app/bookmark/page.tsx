@@ -1,69 +1,15 @@
-// app/bookmark/page.tsx
 import Link from "next/link";
+import { TopNavAuth } from "@/components/TopNavAuth"; // ✅ 1. 새 네비게이션 불러오기
 
-function TopNav() {
-  return (
-    <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
-        {/* 로고 */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] shadow-md">
-            <span className="text-sm text-white">✈️</span>
-          </div>
-          <span className="text-sm font-semibold text-gray-800 md:text-base">
-            스마트 트래블 플래너
-          </span>
-        </Link>
-
-        {/* 중앙 메뉴 */}
-        <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
-          <Link
-            href="/"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>🏠</span>
-            <span>홈</span>
-          </Link>
-          <Link
-            href="/bookmark"
-            className="flex items-center gap-1 rounded-full bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-900 shadow-sm md:text-sm"
-          >
-            <span>🔖</span>
-            <span>북마크</span>
-          </Link>
-          <Link
-            href="/settings"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>⚙️</span>
-            <span>설정</span>
-          </Link>
-        </div>
-
-        {/* 우측 버튼 */}
-        <div className="flex items-center gap-2 text-xs md:text-sm">
-          <Link
-            href="/login"
-            className="rounded-full px-3 py-1.5 font-medium text-gray-700 hover:bg-white"
-          >
-            로그인
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-4 py-1.5 font-semibold text-white shadow-md shadow-[#7a6bff33] hover:opacity-95"
-          >
-            회원가입
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
-}
+// 🗑️ [삭제됨] 기존 function TopNav() {...} 코드는 이제 필요 없어서 지웠습니다.
 
 export default function BookmarkPage() {
   return (
     <div className="flex min-h-screen flex-col">
-      <TopNav />
+      
+      {/* 👇👇👇 [수정된 부분] 기존 <TopNav /> 대신 이걸로 교체! 👇👇👇 */}
+      <TopNavAuth />
+      {/* 👆👆👆 이제 로그인 상태(OOO님)가 여기서도 유지됩니다 */}
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-16 pt-8 md:pt-10">
         {/* 헤더 */}
@@ -266,4 +212,3 @@ export default function BookmarkPage() {
     </div>
   );
 }
-
