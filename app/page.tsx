@@ -1,6 +1,5 @@
-// app/page.tsx
 "use client";
-import { TopNavAuth } from "@/components/TopNavAuth";
+import { TopNavAuth } from "@/components/TopNavAuth"; // 👈 1. 불러오기
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,7 +27,7 @@ export default function HomePage() {
 
   const [dateError, setDateError] = useState<string | null>(null);
 
-  // 🔹 여행 기간 계산 (출발일/귀국일이 모두 있고 순서가 올바를 때만)
+  // 🔹 여행 기간 계산
   let tripNights: number | null = null;
   let tripDays: number | null = null;
 
@@ -56,12 +55,10 @@ export default function HomePage() {
 
     const params = new URLSearchParams();
 
-    // 🔹 여행지/키워드 (선택)
     if (destination.trim()) {
       params.set("destination", destination.trim());
     }
 
-    // 🔹 날짜 (필수)
     params.set("departureDate", format(departureDate, "yyyy-MM-dd"));
     params.set("returnDate", format(returnDate, "yyyy-MM-dd"));
 
@@ -69,7 +66,6 @@ export default function HomePage() {
       params.set("tripNights", String(tripNights));
     }
 
-    // 🔹 인원 / 예산 등급 (필수)
     params.set("people", people);
     params.set("budgetLevel", budgetLevel);
 
@@ -78,61 +74,11 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      {/* 상단 네비게이션 */}
-      <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
-          {/* 로고 */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] shadow-md">
-              <span className="text-sm text-white">✈️</span>
-            </div>
-            <span className="text-sm font-semibold text-gray-800 md:text-base">
-              스마트 트래블 플래너
-            </span>
-          </Link>
+      
+      {/* 👇👇👇 [수정된 부분] 기존 <nav> 코드를 싹 지우고 이것만 남김 👇👇👇 */}
+      <TopNavAuth />
+      {/* 👆👆👆 TopNavAuth 안에 이미 로고, 메뉴, 로그인 버튼이 다 들어있습니다 */}
 
-          {/* 중앙 메뉴 */}
-          <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
-            <Link
-              href="/"
-              className="flex items-center gap-1 rounded-full bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-900 shadow-sm md:text-sm"
-            >
-              <span>🏠</span>
-              <span>홈</span>
-            </Link>
-            <Link
-              href="/bookmark"
-              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-            >
-              <span>🔖</span>
-              <span>북마크</span>
-            </Link>
-            <Link
-              href="/settings"
-              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-            >
-              <span>⚙️</span>
-              <span>설정</span>
-            </Link>
-          </div>
-
-          {/* 우측 버튼 */}
-          <div className="flex items-center gap-2 text-xs md:text-sm">
-            <Link
-              href="/login"
-              className="rounded-full px-3 py-1.5 font-medium text-gray-700 hover:bg-white"
-            >
-              로그인
-            </Link>
-            <Link
-              href="/signup"
-              className="rounded-full bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-4 py-1.5 font-semibold text-white shadow-md shadow-[#7a6bff33] hover:opacity-95"
-            >
-              회원가입
-            </Link>
-          </div>
-        </div>
-      </nav>
 
       {/* 메인 콘텐츠 */}
       <main className="flex flex-1 items-center justify-center px-4 pb-16 pt-10 md:pt-16">
