@@ -1,68 +1,11 @@
-// app/signup/page.tsx
 "use client";
 
+import { TopNavAuth } from "@/components/TopNavAuth"; // ✅ 1. 새 네비게이션 불러오기
 import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-function TopNav() {
-  return (
-    <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:py-4">
-        {/* 로고 */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] shadow-md">
-            <span className="text-sm text-white">✈️</span>
-          </div>
-          <span className="text-sm font-semibold text-gray-800 md:text-base">
-            스마트 트래블 플래너
-          </span>
-        </Link>
-
-        {/* 중앙 메뉴 */}
-        <div className="hidden items-center gap-4 text-sm text-gray-500 md:flex">
-          <Link
-            href="/"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>🏠</span>
-            <span>홈</span>
-          </Link>
-          <Link
-            href="/bookmark"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>🔖</span>
-            <span>북마크</span>
-          </Link>
-          <Link
-            href="/settings"
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium hover:bg-white/70 md:text-sm"
-          >
-            <span>⚙️</span>
-            <span>설정</span>
-          </Link>
-        </div>
-
-        {/* 우측 버튼 */}
-        <div className="flex items-center gap-2 text-xs md:text-sm">
-          <Link
-            href="/login"
-            className="rounded-full px-3 py-1.5 font-medium text-gray-700 hover:bg-white"
-          >
-            로그인
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full bg-gradient-to-r from-[#6f6bff] to-[#ba7bff] px-4 py-1.5 font-semibold text-white shadow-md shadow-[#7a6bff33] hover:opacity-95"
-          >
-            회원가입
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
-}
+// 🗑️ [삭제됨] 기존 function TopNav() {...} 코드는 이제 필요 없어서 지웠습니다.
 
 export default function SignupPage() {
   const router = useRouter();
@@ -129,7 +72,7 @@ export default function SignupPage() {
         return;
       }
 
-      // ✅ 회원가입 성공 시 바로 홈으로 이동 (로그인/세션은 백엔드 로직에 따라 처리)
+      // ✅ 회원가입 성공 시 바로 홈으로 이동
       router.push("/");
     } catch {
       setErrorMessage(
@@ -161,7 +104,6 @@ export default function SignupPage() {
 
     try {
       setEmailSending(true);
-      // 실제 구현된 이메일 인증 API 경로에 맞게 수정해서 사용하세요.
       const res = await fetch("/api/auth/email/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -200,7 +142,10 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopNav />
+      
+      {/* 👇👇👇 [수정된 부분] 기존 <TopNav />를 이것으로 교체! 👇👇👇 */}
+      <TopNavAuth />
+      {/* 👆👆👆 이제 로그인 상태가 연동됩니다 */}
 
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/90 p-8 shadow-xl shadow-indigo-100">
