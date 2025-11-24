@@ -7,11 +7,9 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 
 // 🚨 [핵심] 시도할 모델 리스트 (순서대로 시도함)
 const MODELS_TO_TRY = [
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash-001",
-  "gemini-1.0-pro",
-  "gemini-pro" // 최후의 보루
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-flash-latest" 
 ];
 
 // 자동 재시도 함수
