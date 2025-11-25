@@ -1,6 +1,7 @@
-//app/boolkmark/page.tsx
+//app/bookmark/page.tsx
 "use client";
 
+// 🚨 빌드 에러 방지 및 항상 최신 데이터 로드
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense } from 'react';
@@ -20,102 +21,104 @@ interface BookmarkItem {
   createdAt: string;
 }
 
-// ✅ 내부 컴포넌트
+// ✅ 내부 컴포넌트 (로직 수정됨)
 function BookmarkContent() {
   const router = useRouter();
 
-  // 🔹 [수정됨] useSession 대신 우리 서버의 인증 상태 관리
+  // 🔹 [수정] useSession 제거 -> 커스텀 인증 상태 관리
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [authLoading, setAuthLoading] = useState(true); // 인증 로딩 상태
-  
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
-  const [dataLoading, setDataLoading] = useState(true); // 데이터 로딩 상태
+  
+  // 로딩 상태 통합 (인증 로딩 + 데이터 로딩)
+  const [loading, setLoading] = useState(true);
 
-  // 1. 초기 인증 체크 및 데이터 로드
+  // 1. 초기 데이터 로드 및 인증 체크
   useEffect(() => {
     async function init() {
       try {
-        // (1) 로그인 상태 확인 (/api/auth/me 호출)
+        // (1) 로그인 체크 (우리 서버 API 사용)
+        // cache: 'no-store'로 항상 최신 로그인 상태 확인
         const authRes = await fetch("/api/auth/me", { cache: 'no-store' });
         
         if (authRes.ok) {
           const authData = await authRes.json();
           if (authData.authenticated) {
             setUser(authData.user);
-            // (2) 로그인 되었으면 북마크 가져오기
+            // (2) 로그인 성공 시 북마크 불러오기
             await fetchBookmarks();
           } else {
-            // 로그인 안 됨 -> 로그인 페이지로 이동
-            setUser(null);
-            if (typeof window !== 'undefined') {
-                // alert('로그인이 필요한 페이지입니다.'); // 필요시 주석 해제
-                router.push('/login');
-            }
+            // 비로그인 상태 처리
+            handleUnauthenticated();
           }
         } else {
-           setUser(null);
-           router.push('/login');
+           // 인증 에러
+           handleUnauthenticated();
         }
       } catch (error) {
         console.error("초기화 실패", error);
       } finally {
-        setAuthLoading(false);
-        setDataLoading(false);
+        // 로딩 끝
+        setLoading(false);
       }
     }
 
     init();
   }, [router]);
 
-  // 북마크 데이터 가져오기 함수
+  const handleUnauthenticated = () => {
+    if (typeof window !== 'undefined') {
+      alert('로그인이 필요한 페이지입니다.');
+      router.push('/login');
+    }
+  };
+
+  // 북마크 목록 가져오기
   const fetchBookmarks = async () => {
     try {
-      // 🔹 [수정됨] 우리가 만든 API 경로 사용
-      // 캐시 방지 옵션 추가
+      // 🔹 [수정] 캐시 방지 헤더 추가 (저장 후 즉시 반영되도록)
       const res = await fetch('/api/bookmark', { 
         cache: 'no-store',
-        headers: {
+        headers: { 
             'Pragma': 'no-cache',
             'Cache-Control': 'no-cache'
         }
-      }); 
+      });
       
       if (!res.ok) throw new Error('데이터를 불러오는데 실패했습니다.');
       
       const responseData = await res.json();
+      // API 응답 구조에 따라 데이터 설정
       setBookmarks(responseData.data || []);
     } catch (error) {
       console.error('북마크 로딩 에러:', error);
     }
   };
 
-  // 북마크 삭제 함수
+  // 삭제 핸들러 (DELETE 방식으로 수정)
   const handleRemove = async (cityName: string, id: string) => {
     if (!confirm(`'${cityName}'을(를) 목록에서 삭제하시겠습니까?`)) return;
 
-    // 낙관적 업데이트 (UI 먼저 반영)
+    // 낙관적 업데이트 (UI 먼저 반영하여 빠르게 느끼게 함)
     const prevBookmarks = [...bookmarks];
     setBookmarks((prev) => prev.filter((item) => item.id !== id));
 
     try {
-      // 🔹 [수정됨] DELETE 메서드 사용 및 쿼리 파라미터로 ID 전달
+      // 🔹 [수정] DELETE 메서드 사용 (표준 준수)
       const res = await fetch(`/api/bookmark?id=${id}`, {
         method: 'DELETE',
       });
 
       if (!res.ok) throw new Error("삭제 실패");
       
-      // 성공 시 별도 작업 없음 (이미 UI 업데이트됨)
-
     } catch (error) {
       console.error('삭제 요청 실패:', error);
-      setBookmarks(prevBookmarks); // 실패 시 UI 원복
-      alert('삭제하지 못했습니다. 다시 시도해주세요.');
+      setBookmarks(prevBookmarks); // 실패 시 롤백
+      alert('서버 오류로 삭제하지 못했습니다.');
     }
   };
 
-  // 로딩 스켈레톤 UI (디자인 유지)
-  if (authLoading || dataLoading) {
+  // 로딩 스켈레톤 UI (기존 디자인 100% 유지)
+  if (loading) {
     return (
       <div className="mx-auto w-full max-w-6xl px-4 py-10">
         <div className="mb-8 h-8 w-48 animate-pulse rounded bg-gray-200"></div>
@@ -128,7 +131,8 @@ function BookmarkContent() {
     );
   }
 
-  if (!user) return null; // 리다이렉트 중
+  // 유저 정보가 없으면 렌더링 안 함 (리다이렉트 중)
+  if (!user) return null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-16 pt-8 md:pt-10">
@@ -148,7 +152,7 @@ function BookmarkContent() {
 
       {/* 컨텐츠 섹션 */}
       {bookmarks.length === 0 ? (
-        // Empty State
+        // Empty State (디자인 유지)
         <section className="flex flex-col items-center justify-center rounded-3xl bg-white px-6 py-20 text-center shadow-sm border border-gray-100">
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-50 text-4xl shadow-inner">
             ✈️
@@ -168,7 +172,7 @@ function BookmarkContent() {
           </Link>
         </section>
       ) : (
-        // Bookmark List
+        // Bookmark List (디자인 유지)
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {bookmarks.map((item) => (
             <article
@@ -215,7 +219,7 @@ function BookmarkContent() {
                 
                 <div className="flex gap-2">
                   <Link
-                    // 🚨 [수정됨] 상세 페이지 링크 연결 (쿼리 파라미터 전달)
+                    // 🔹 [상세 연결] 쿼리 파라미터를 통해 도시 정보 전달
                     href={`/city/${item.id}?cityName=${encodeURIComponent(item.cityName)}&country=${encodeURIComponent(item.country)}`}
                     className="rounded-full bg-gray-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-gray-700"
                   >
