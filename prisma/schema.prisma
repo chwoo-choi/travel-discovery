@@ -1,5 +1,7 @@
 // This is your Prisma schema file,
 // 1. 데이터베이스 설정
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,64 +12,78 @@ datasource db {
 }
 
 // --------------------------------------
-// 2. 사용자 모델 (User)
+// 1. 사용자 및 인증 (User & Account)
 // --------------------------------------
 
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
-  emailVerified DateTime? // 소셜 로그인 호환을 위해 표준 필드명 사용 권장
+  emailVerified DateTime?
   image         String?
-  
-  // 직접 구현한 인증 필드
-  passwordHash  String?   
+  passwordHash  String?   // 이메일 가입용 비밀번호
   
   // 관계 설정
-  bookmarks     Bookmark[] // 유저가 저장한 북마크들
+  accounts      Account[]  // 소셜 로그인 계정 연동
+  bookmarks     Bookmark[] // 북마크
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
 
+// 👇 [이 모델이 없어서 에러가 난 것입니다!]
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
 // --------------------------------------
-// 3. 인증 관련 모델 (Verification)
+// 2. 인증 관련 모델
 // --------------------------------------
 
-// 이메일 회원가입 시 사용하는 6자리 인증번호 저장소
 model VerificationToken {
-  identifier String   // 이메일 주소
-  token      String   // 인증번호 (예: 123456)
-  expires    DateTime // 만료 시간
+  identifier String
+  token      String
+  expires    DateTime
 
-  // 이메일+토큰 조합은 유일해야 함
   @@unique([identifier, token])
 }
 
 // --------------------------------------
-// 4. 여행지 북마크 모델 (Bookmark)
+// 3. 여행지 북마크 (Bookmark)
 // --------------------------------------
 
 model Bookmark {
   id          String   @id @default(cuid())
   userId      String
   
-  // AI가 추천해준 여행지 정보를 스냅샷처럼 저장
-  cityName    String   // 도시 이름 (예: 오사카)
-  country     String   // 국가 이름 (예: 일본)
-  emoji       String   // 이모지 (예: 🐙)
-  description String   @db.Text // 긴 설명 저장 (Text 타입 필수)
-  price       String   // 예상 가격 텍스트
-  tags        String   // 태그 배열을 문자열로 변환해서 저장 (JSON.stringify)
+  cityName    String
+  country     String
+  emoji       String
+  description String   @db.Text
+  price       String
+  tags        String   // JSON 문자열
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // 관계 설정: User 모델과 연결 (유저가 탈퇴하면 북마크도 삭제됨)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // 제약 조건: 한 유저가 같은 도시를 중복해서 저장할 수 없음
   @@unique([userId, cityName])
-  // 성능 최적화: 유저 아이디로 빨리 찾기 위해 인덱스 설정
   @@index([userId])
 }

@@ -80,11 +80,8 @@ export async function GET(req: NextRequest) {
       redirectCookie && redirectCookie.startsWith("/") ? redirectCookie : "/";
     const redirectTarget = new URL(redirectPath, baseUrl).toString();
 
-    // 1) code 유무 확인
-    if (!code) {
-      console.error("Google OAuth callback: code가 없습니다.");
-      const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      // 상태 관련 쿠키는 정리
+    // 쿠키 정리용 헬퍼 함수
+    const clearAuthCookies = (res: NextResponse) => {
       res.cookies.set("google_oauth_state", "", {
         httpOnly: true,
         secure: useSecureCookies,
@@ -99,6 +96,13 @@ export async function GET(req: NextRequest) {
         path: "/",
         maxAge: 0,
       });
+    };
+
+    // 1) code 유무 확인
+    if (!code) {
+      console.error("Google OAuth callback: code가 없습니다.");
+      const res = NextResponse.redirect(redirectTarget, { status: 302 });
+      clearAuthCookies(res);
       return res;
     }
 
@@ -110,20 +114,7 @@ export async function GET(req: NextRequest) {
         "cookie state:", stateCookie
       );
       const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      clearAuthCookies(res);
       return res;
     }
 
@@ -153,20 +144,7 @@ export async function GET(req: NextRequest) {
         errorBody
       );
       const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      clearAuthCookies(res);
       return res;
     }
 
@@ -180,20 +158,7 @@ export async function GET(req: NextRequest) {
         tokenJson.error_description
       );
       const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      clearAuthCookies(res);
       return res;
     }
 
@@ -201,20 +166,7 @@ export async function GET(req: NextRequest) {
     if (!accessToken) {
       console.error("Google OAuth callback: access_token이 없습니다.");
       const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      clearAuthCookies(res);
       return res;
     }
 
@@ -238,101 +190,89 @@ export async function GET(req: NextRequest) {
         errorBody
       );
       const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      clearAuthCookies(res);
       return res;
     }
 
     const profile = (await userInfoResponse.json()) as GoogleUserInfo;
 
-    if (!profile.id) {
-      console.error("Google OAuth callback: 프로필에 id가 없습니다.", profile);
+    if (!profile.id || !profile.email) {
+      console.error("Google OAuth callback: 프로필 정보가 부족합니다.", profile);
       const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      return res;
-    }
-
-    if (!profile.email) {
-      console.error(
-        "Google OAuth callback: 프로필에 email이 없습니다.",
-        profile
-      );
-      const res = NextResponse.redirect(redirectTarget, { status: 302 });
-      res.cookies.set("google_oauth_state", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
-      res.cookies.set("google_oauth_redirect_to", "", {
-        httpOnly: true,
-        secure: useSecureCookies,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      clearAuthCookies(res);
       return res;
     }
 
     const googleId = profile.id;
     const email = profile.email.toLowerCase().trim();
     const name = profile.name ?? "Google 사용자";
+    const picture = profile.picture;
 
-    // 5) DB에서 유저 찾기/생성
-    let user =
-      (await prisma.user.findUnique({
-        where: { googleId },
-      })) ?? null;
+    // 5) DB에서 유저 찾기/생성 (Account 테이블 사용 방식으로 변경)
+    
+    // 5-1. 이미 연동된 계정인지 확인 (Account 테이블 조회)
+    const existingAccount = await prisma.account.findFirst({
+      where: {
+        provider: "google",
+        providerAccountId: googleId,
+      },
+      include: { user: true },
+    });
+
+    let user = existingAccount?.user;
 
     if (!user) {
-      // googleId로는 없지만, 같은 이메일이 이미 있는지 확인
-      const existingByEmail = await prisma.user.findUnique({
+      // 5-2. 연동된 계정이 없다면, 이메일로 기존 유저 찾기
+      const existingUser = await prisma.user.findUnique({
         where: { email },
       });
 
-      if (existingByEmail) {
-        // 이메일 계정에 googleId 연결
-        user = await prisma.user.update({
-          where: { id: existingByEmail.id },
+      if (existingUser) {
+        // 유저는 있는데 구글 연동이 안 된 경우 -> Account 연결
+        await prisma.account.create({
           data: {
-            googleId,
-            name: existingByEmail.name || name,
+            userId: existingUser.id,
+            type: "oauth",
+            provider: "google",
+            providerAccountId: googleId,
+            access_token: tokenJson.access_token,
+            refresh_token: tokenJson.refresh_token,
+            expires_at: Math.floor(Date.now() / 1000 + (tokenJson.expires_in || 3600)),
+            token_type: tokenJson.token_type,
+            scope: tokenJson.scope,
+            id_token: tokenJson.id_token,
           },
         });
+        user = existingUser;
+        
+        // 필요하다면 프로필 이미지 등 업데이트 (선택)
+        if (picture && !user.image) {
+           await prisma.user.update({
+             where: { id: user.id },
+             data: { image: picture },
+           });
+        }
       } else {
-        // 완전히 새 계정 생성 (비밀번호 없이 구글 전용)
+        // 5-3. 아예 새로운 유저 -> User 생성 + Account 생성
         user = await prisma.user.create({
           data: {
-            email,
             name,
-            googleId,
-            // passwordHash: null (schema에서 nullable이라고 가정)
+            email,
+            image: picture,
+            emailVerified: new Date(), // 구글 인증이므로 이메일 인증 완료 처리
+            accounts: {
+              create: {
+                type: "oauth",
+                provider: "google",
+                providerAccountId: googleId,
+                access_token: tokenJson.access_token,
+                refresh_token: tokenJson.refresh_token,
+                expires_at: Math.floor(Date.now() / 1000 + (tokenJson.expires_in || 3600)),
+                token_type: tokenJson.token_type,
+                scope: tokenJson.scope,
+                id_token: tokenJson.id_token,
+              },
+            },
           },
         });
       }
@@ -364,21 +304,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 더 이상 필요 없는 상태/리다이렉트 쿠키 정리
-    res.cookies.set("google_oauth_state", "", {
-      httpOnly: true,
-      secure: useSecureCookies,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
-
-    res.cookies.set("google_oauth_redirect_to", "", {
-      httpOnly: true,
-      secure: useSecureCookies,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
+    clearAuthCookies(res);
 
     return res;
   } catch (error) {
