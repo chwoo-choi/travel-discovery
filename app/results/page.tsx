@@ -1,15 +1,13 @@
-//  app/results/page.tsx
+// app/results/page.tsx
 "use client";
 
-// 🚨 빌드 에러 방지
 export const dynamic = "force-dynamic";
 
 import { TopNavAuth } from "@/components/TopNavAuth";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 
-// 데이터 타입 정의
 type Recommendation = {
   cityName: string;
   country: string;
@@ -22,15 +20,14 @@ type Recommendation = {
   weather: string;
 };
 
-// 🔹 알맹이 컴포넌트
 function SearchResultsContent() {
   const searchParams = useSearchParams(); 
+  const router = useRouter();
   
   const [loading, setLoading] = useState(true);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // 안전하게 파라미터 가져오기
   const destination = searchParams?.get("destination") || "";
   const people = searchParams?.get("people") || "2명";
   const budgetLevel = searchParams?.get("budgetLevel") || "스탠다드";
@@ -80,15 +77,46 @@ function SearchResultsContent() {
     }
   }, [searchParams, destination, people, budgetLevel, departureDate, tripNights]);
 
-  // 북마크 저장 핸들러 (API 연동 전 UI만 구현)
-  const handleBookmark = (city: Recommendation) => {
-    alert(`'${city.cityName}'이(가) 북마크에 저장되었습니다! (실제 저장은 DB 연동 후 가능)`);
+  // 🚨 실제 DB 저장 로직 연결
+  const handleBookmark = async (city: Recommendation) => {
+    try {
+      const res = await fetch("/api/bookmark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cityName: city.cityName,
+          country: city.country,
+          emoji: city.emoji,
+          description: city.reason,
+          price: city.flightPrice, 
+          tags: city.tags,
+        }),
+      });
+
+      if (res.status === 401) {
+        if(confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
+            router.push("/login");
+        }
+        return;
+      }
+
+      if (res.status === 409) {
+        alert("이미 북마크에 저장된 여행지입니다!");
+        return;
+      }
+
+      if (!res.ok) throw new Error("저장 실패");
+
+      alert(`'${city.cityName}'이(가) 북마크에 저장되었습니다! 🔖`);
+
+    } catch (error) {
+      console.error(error);
+      alert("북마크 저장 중 오류가 발생했습니다.");
+    }
   };
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col">
-      
-      {/* 헤더 영역 */}
       <header className="mb-8 text-center animate-fade-in-up">
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#6f6bff]">
           AI SMART TRAVEL PLANNER
@@ -119,7 +147,6 @@ function SearchResultsContent() {
         </div>
       </header>
 
-      {/* 로딩 상태 */}
       {loading && (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
@@ -132,21 +159,16 @@ function SearchResultsContent() {
         </div>
       )}
 
-      {/* 에러 상태 */}
       {error && !loading && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-3xl bg-gray-50 text-center p-6">
           <span className="text-4xl mb-3">😵</span>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="rounded-2xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-gray-800 transition-transform hover:scale-105"
-          >
+          <button onClick={() => window.location.reload()} className="rounded-2xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-gray-800 transition-transform hover:scale-105">
             다시 시도하기
           </button>
         </div>
       )}
 
-      {/* 결과 리스트 */}
       {!loading && !error && recommendations.length > 0 && (
         <>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-10">
@@ -157,7 +179,6 @@ function SearchResultsContent() {
                 style={{ animationDelay: `${index * 100}ms` }}
               >
                 <div className="absolute top-0 left-0 h-32 w-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] opacity-90 group-hover:opacity-100 transition-opacity"></div>
-                
                 <div className="absolute top-4 right-4 z-10 flex items-center gap-1 rounded-full bg-white/30 px-2.5 py-1 backdrop-blur-md border border-white/20">
                   <span className="text-[10px] font-bold text-white">{city.matchScore}% 일치</span>
                 </div>
@@ -190,16 +211,16 @@ function SearchResultsContent() {
                       <span className="text-xs font-bold text-gray-900">{city.flightPrice}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2 mt-2">
                          <Link
                             href={`/city/${index}?cityName=${encodeURIComponent(city.cityName)}&country=${encodeURIComponent(city.country)}`}
-                            className="flex-1 mr-2 rounded-xl bg-gray-900 py-2 text-xs font-bold text-white text-center hover:bg-gray-800 transition-colors"
+                            className="flex-1 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white text-center hover:bg-gray-800 transition-colors"
                          >
                             상세 보기
                          </Link>
                          <button 
                             onClick={() => handleBookmark(city)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors shadow-sm"
                          >
                             ♥
                          </button>
@@ -209,7 +230,6 @@ function SearchResultsContent() {
               </div>
             ))}
           </div>
-
           <div className="flex justify-center pb-10">
              <Link href="/">
               <button className="rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white shadow-lg hover:bg-gray-800 hover:scale-105 transition-all">
@@ -223,7 +243,6 @@ function SearchResultsContent() {
   );
 }
 
-// 🔹 [메인 페이지] Suspense 적용
 export default function ResultsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">

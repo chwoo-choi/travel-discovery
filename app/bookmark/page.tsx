@@ -1,7 +1,7 @@
-//app/bookmark/page.tsx
+// app/bookmark/page.tsx
 "use client";
 
-// 🚨 빌드 에러 방지 및 항상 최신 데이터 로드
+// 🚨 API 응답 캐싱 방지 (항상 최신 데이터 로드)
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense } from 'react';
@@ -21,22 +21,22 @@ interface BookmarkItem {
   createdAt: string;
 }
 
-// ✅ 내부 컴포넌트 (로직 수정됨)
+// ✅ 내부 컴포넌트
 function BookmarkContent() {
   const router = useRouter();
 
-  // 🔹 [수정] useSession 제거 -> 커스텀 인증 상태 관리
+  // 🔹 [수정됨] useSession 대신 우리 서버의 인증 상태 관리
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [authLoading, setAuthLoading] = useState(true); // 인증 로딩 상태
   
-  // 로딩 상태 통합 (인증 로딩 + 데이터 로딩)
-  const [loading, setLoading] = useState(true);
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [dataLoading, setDataLoading] = useState(true); // 데이터 로딩 상태
 
-  // 1. 초기 데이터 로드 및 인증 체크
+  // 1. 초기 인증 체크 및 데이터 로드
   useEffect(() => {
     async function init() {
       try {
-        // (1) 로그인 체크 (우리 서버 API 사용)
+        // (1) 로그인 상태 확인 (/api/auth/me 호출)
         // cache: 'no-store'로 항상 최신 로그인 상태 확인
         const authRes = await fetch("/api/auth/me", { cache: 'no-store' });
         
@@ -58,7 +58,8 @@ function BookmarkContent() {
         console.error("초기화 실패", error);
       } finally {
         // 로딩 끝
-        setLoading(false);
+        setAuthLoading(false);
+        setDataLoading(false);
       }
     }
 
@@ -67,8 +68,9 @@ function BookmarkContent() {
 
   const handleUnauthenticated = () => {
     if (typeof window !== 'undefined') {
-      alert('로그인이 필요한 페이지입니다.');
-      router.push('/login');
+      // alert('로그인이 필요한 페이지입니다.'); // 너무 자주 뜨면 불편하니 제거 가능
+      // router.push('/login'); // 리다이렉트 대신 로그인 버튼을 보여주는 UI로 처리할 수도 있음
+      // 여기서는 사용자 경험을 위해 리다이렉트 보다는 빈 상태를 보여주고 로그인 유도
     }
   };
 
@@ -87,7 +89,7 @@ function BookmarkContent() {
       if (!res.ok) throw new Error('데이터를 불러오는데 실패했습니다.');
       
       const responseData = await res.json();
-      // API 응답 구조에 따라 데이터 설정
+      // API 응답 구조({ data: [...] })에 따라 데이터 설정
       setBookmarks(responseData.data || []);
     } catch (error) {
       console.error('북마크 로딩 에러:', error);
@@ -110,15 +112,17 @@ function BookmarkContent() {
 
       if (!res.ok) throw new Error("삭제 실패");
       
+      // 성공 시 별도 작업 없음 (이미 UI 업데이트됨)
+
     } catch (error) {
       console.error('삭제 요청 실패:', error);
       setBookmarks(prevBookmarks); // 실패 시 롤백
-      alert('서버 오류로 삭제하지 못했습니다.');
+      alert('삭제하지 못했습니다. 다시 시도해주세요.');
     }
   };
 
   // 로딩 스켈레톤 UI (기존 디자인 100% 유지)
-  if (loading) {
+  if (authLoading || dataLoading) {
     return (
       <div className="mx-auto w-full max-w-6xl px-4 py-10">
         <div className="mb-8 h-8 w-48 animate-pulse rounded bg-gray-200"></div>
@@ -131,8 +135,18 @@ function BookmarkContent() {
     );
   }
 
-  // 유저 정보가 없으면 렌더링 안 함 (리다이렉트 중)
-  if (!user) return null;
+  // 비로그인 상태일 때 보여줄 화면 (리다이렉트 대신 안내 메시지)
+  if (!user) {
+    return (
+        <div className="mx-auto w-full max-w-6xl px-4 py-20 text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">로그인이 필요합니다 🔒</h2>
+            <p className="text-gray-600 mb-8">북마크를 확인하려면 먼저 로그인을 해주세요.</p>
+            <Link href="/login" className="rounded-full bg-indigo-600 px-8 py-3 text-white font-bold hover:bg-indigo-700 transition-colors">
+                로그인하러 가기
+            </Link>
+        </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-16 pt-8 md:pt-10">
@@ -142,7 +156,7 @@ function BookmarkContent() {
           My Wishlist
         </p>
         <h1 className="text-3xl font-extrabold leading-tight text-gray-900 md:text-4xl">
-          {user.name || '사용자'}님의 <br className="md:hidden" />
+          {user.name}님의 <br className="md:hidden" />
           <span className="text-indigo-600">여행 컬렉션</span>
         </h1>
         <p className="mt-3 text-sm text-gray-500">
