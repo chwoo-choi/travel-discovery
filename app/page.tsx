@@ -1,5 +1,10 @@
+// app/page.tsx
 "use client";
-import { TopNavAuth } from "@/components/TopNavAuth"; // 👈 1. 불러오기
+
+// ✅ [핵심 수정] 캘린더 스타일 CSS를 불러옵니다. (이게 없어서 깨져 보였던 것입니다)
+import "react-day-picker/dist/style.css";
+
+import { TopNavAuth } from "@/components/TopNavAuth"; 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -75,10 +80,7 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
       
-      {/* 👇👇👇 [수정된 부분] 기존 <nav> 코드를 싹 지우고 이것만 남김 👇👇👇 */}
       <TopNavAuth />
-      {/* 👆👆👆 TopNavAuth 안에 이미 로고, 메뉴, 로그인 버튼이 다 들어있습니다 */}
-
 
       {/* 메인 콘텐츠 */}
       <main className="flex flex-1 items-center justify-center px-4 pb-16 pt-10 md:pt-16">
@@ -155,7 +157,7 @@ export default function HomePage() {
                   />
 
                   {isDepartureOpen && (
-                    <div className="absolute left-0 z-20 mt-2 w-[260px] rounded-2xl border border-gray-100 bg-white p-3 shadow-lg">
+                    <div className="absolute left-0 z-20 mt-2 w-auto rounded-2xl border border-gray-100 bg-white p-3 shadow-lg">
                       <DayPicker
                         mode="single"
                         locale={ko}
@@ -193,7 +195,7 @@ export default function HomePage() {
                   />
 
                   {isReturnOpen && (
-                    <div className="absolute left-0 z-20 mt-2 w-[260px] rounded-2xl border border-gray-100 bg-white p-3 shadow-lg">
+                    <div className="absolute left-0 z-20 mt-2 w-auto rounded-2xl border border-gray-100 bg-white p-3 shadow-lg">
                       <DayPicker
                         mode="single"
                         locale={ko}

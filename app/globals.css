@@ -18,3 +18,22 @@ body {
   color: var(--foreground);*/
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 👇👇👇 [추가된 부분] DayPicker(캘린더) 커스텀 스타일 👇👇👇 */
+.rdp {
+  --rdp-cell-size: 40px !important; /* 날짜 칸 크기 조정 */
+  --rdp-accent-color: #6f6bff !important; /* 브랜드 컬러(보라색) 적용 */
+  --rdp-background-color: #f3f4f6 !important; /* 선택된 날짜 배경 */
+  margin: 0 !important;
+}
+
+/* 마우스 올렸을 때 효과 */
+.rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+  background-color: #eff6ff !important;
+  border-radius: 50%;
+}
+
+/* 선택된 날짜 글씨 굵게 */
+.rdp-day_selected {
+  font-weight: bold;
+}
