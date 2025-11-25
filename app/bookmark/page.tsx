@@ -1,8 +1,5 @@
 // app/bookmark/page.tsx
 "use client";
-
-// ✅ [핵심 수정] 이 페이지를 정적(Static)이 아닌 동적(Dynamic)으로 강제 설정합니다.
-// 빌드 시점에 미리 생성하지 않고, 요청이 들어올 때마다 렌더링하도록 하여 빌드 에러를 방지합니다.
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense } from 'react';
