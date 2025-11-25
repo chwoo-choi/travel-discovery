@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { TopNavAuth } from '@/components/TopNavAuth';
 
-// DB 데이터 타입 정의 (유저가 정의한 그대로 유지)
+// DB 데이터 타입 정의 (기존 유지)
 interface BookmarkItem {
   id: string;
   cityName: string;
@@ -24,7 +24,7 @@ interface BookmarkItem {
 function BookmarkContent() {
   const router = useRouter();
 
-  // 🔹 우리 인증 방식에 맞는 상태 변수
+  // 🔹 [수정됨] useSession 대신 우리 서버의 인증 상태 관리
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true); // 인증 로딩 상태
   
@@ -35,8 +35,9 @@ function BookmarkContent() {
   useEffect(() => {
     async function init() {
       try {
-        // (1) 로그인 상태 확인
-        const authRes = await fetch("/api/auth/me");
+        // (1) 로그인 상태 확인 (/api/auth/me 호출)
+        const authRes = await fetch("/api/auth/me", { cache: 'no-store' });
+        
         if (authRes.ok) {
           const authData = await authRes.json();
           if (authData.authenticated) {
@@ -44,13 +45,16 @@ function BookmarkContent() {
             // (2) 로그인 되었으면 북마크 가져오기
             await fetchBookmarks();
           } else {
-            // 로그인 안 됨
+            // 로그인 안 됨 -> 로그인 페이지로 이동
             setUser(null);
-            alert('로그인이 필요한 페이지입니다.');
-            router.push('/login');
+            if (typeof window !== 'undefined') {
+                // alert('로그인이 필요한 페이지입니다.'); // 필요시 주석 해제
+                router.push('/login');
+            }
           }
         } else {
            setUser(null);
+           router.push('/login');
         }
       } catch (error) {
         console.error("초기화 실패", error);
@@ -63,11 +67,19 @@ function BookmarkContent() {
     init();
   }, [router]);
 
+  // 북마크 데이터 가져오기 함수
   const fetchBookmarks = async () => {
     try {
-      // 🚨 API 경로를 기존에 만든 것과 통일하거나 새로 만들어야 합니다.
-      // 여기서는 일단 리스트를 가져오는 로직으로 연결합니다.
-      const res = await fetch('/api/bookmark/list'); 
+      // 🔹 [수정됨] 우리가 만든 API 경로 사용
+      // 캐시 방지 옵션 추가
+      const res = await fetch('/api/bookmark', { 
+        cache: 'no-store',
+        headers: {
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache'
+        }
+      }); 
+      
       if (!res.ok) throw new Error('데이터를 불러오는데 실패했습니다.');
       
       const responseData = await res.json();
@@ -77,32 +89,28 @@ function BookmarkContent() {
     }
   };
 
+  // 북마크 삭제 함수
   const handleRemove = async (cityName: string, id: string) => {
     if (!confirm(`'${cityName}'을(를) 목록에서 삭제하시겠습니까?`)) return;
 
+    // 낙관적 업데이트 (UI 먼저 반영)
     const prevBookmarks = [...bookmarks];
     setBookmarks((prev) => prev.filter((item) => item.id !== id));
 
     try {
-      // 삭제 API 호출 (임시로 list 경로 사용, 실제론 method: DELETE 권장)
-      // 현재 백엔드 API가 없으므로 UI 동작만 확인하도록 에러 처리를 유연하게 합니다.
-      const res = await fetch('/api/bookmark/list', {
-        method: 'POST', // or DELETE
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'delete',
-          id: id
-        }),
+      // 🔹 [수정됨] DELETE 메서드 사용 및 쿼리 파라미터로 ID 전달
+      const res = await fetch(`/api/bookmark?id=${id}`, {
+        method: 'DELETE',
       });
 
-      // 실제 API가 없으면 에러가 날 수 있으니 여기선 넘어가거나
-      // const result = await res.json();
-      // if (result.action !== 'removed') throw new Error("삭제 실패");
+      if (!res.ok) throw new Error("삭제 실패");
+      
+      // 성공 시 별도 작업 없음 (이미 UI 업데이트됨)
 
     } catch (error) {
       console.error('삭제 요청 실패:', error);
-      setBookmarks(prevBookmarks); // 롤백
-      alert('서버 오류로 삭제하지 못했습니다.');
+      setBookmarks(prevBookmarks); // 실패 시 UI 원복
+      alert('삭제하지 못했습니다. 다시 시도해주세요.');
     }
   };
 
@@ -207,6 +215,7 @@ function BookmarkContent() {
                 
                 <div className="flex gap-2">
                   <Link
+                    // 🚨 [수정됨] 상세 페이지 링크 연결 (쿼리 파라미터 전달)
                     href={`/city/${item.id}?cityName=${encodeURIComponent(item.cityName)}&country=${encodeURIComponent(item.country)}`}
                     className="rounded-full bg-gray-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-gray-700"
                   >
