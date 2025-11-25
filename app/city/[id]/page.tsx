@@ -1,14 +1,16 @@
 // app/city/[id]/page.tsx
 "use client";
 
+// 🚨 빌드 에러 방지용: 동적 페이지로 강제 설정
 export const dynamic = "force-dynamic";
+
 import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 
 // ----------------------------------------------------------------------
-// ✅ 데이터 타입 정의 (Strict Typing)
+// ✅ 데이터 타입 정의
 // ----------------------------------------------------------------------
 
 interface PlaceDetail {
@@ -32,14 +34,15 @@ interface CityDetailData {
 }
 
 // ----------------------------------------------------------------------
-// ✅ 상세 페이지 컨텐츠 컴포넌트
+// ✅ 상세 페이지 컨텐츠 (알맹이 컴포넌트)
 // ----------------------------------------------------------------------
 
 function CityDetailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // URL 쿼리 파라미터에서 도시명과 국가 가져오기 (타입 가드)
+  // URL 쿼리 파라미터에서 도시명과 국가 가져오기
+  // 예: /city/seoul?cityName=서울&country=대한민국
   const cityName = searchParams?.get("cityName") || "";
   const country = searchParams?.get("country") || "";
 
@@ -48,12 +51,10 @@ function CityDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 필수 정보 누락 시 처리
+    // 도시 정보가 없으면 경고 후 뒤로가기 (혹은 홈으로)
     if (!cityName || !country) {
-      if (typeof window !== "undefined") {
-         alert("잘못된 접근입니다. 도시 정보가 없습니다.");
-         router.back();
-      }
+      // 필요시 주석 해제
+      // alert("잘못된 접근입니다. 도시 정보가 없습니다.");
       return;
     }
 
@@ -61,7 +62,7 @@ function CityDetailContent() {
       try {
         setLoading(true);
         
-        // 실제 API 호출 (Gemini 연동)
+        // 백엔드 API 호출 (Gemini에게 상세 정보 요청)
         const res = await fetch("/api/city/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -74,7 +75,7 @@ function CityDetailContent() {
 
         const result = await res.json();
         
-        // 데이터 타입 검증 (간단한 체크)
+        // 데이터 유효성 검사
         if (!result || !result.itinerary) {
           throw new Error("유효하지 않은 데이터 형식입니다.");
         }
@@ -100,7 +101,7 @@ function CityDetailContent() {
         <p className="animate-pulse text-lg font-medium text-gray-600">
           AI가 <strong>{cityName}</strong> 여행 계획을 짜고 있어요... ✈️
         </p>
-        <p className="text-sm text-gray-400">약 10~15초 정도 걸릴 수 있습니다.</p>
+        <p className="text-sm text-gray-400">약 5~10초 정도 걸릴 수 있습니다.</p>
       </div>
     );
   }
@@ -249,6 +250,7 @@ export default function CityDetailPage() {
     <div className="min-h-screen bg-white">
       <TopNavAuth />
       <main className="px-4 py-8 md:py-12">
+        {/* useSearchParams를 사용하는 컴포넌트는 반드시 Suspense로 감싸야 함 */}
         <Suspense fallback={<div className="h-screen w-full bg-white"></div>}>
           <CityDetailContent />
         </Suspense>
