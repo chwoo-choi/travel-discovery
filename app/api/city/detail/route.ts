@@ -5,21 +5,44 @@ import { NextResponse } from "next/server";
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
+// 🚨 [핵심 수정] 추천 API와 동일하게 '사용 가능한 최신 모델'로 변경
+const MODELS_TO_TRY = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-flash-latest"
+];
+
+// 자동 재시도 함수
+async function generateWithFallback(prompt: string) {
+  let lastError: unknown = null;
+
+  for (const modelName of MODELS_TO_TRY) {
+    try {
+      console.log(`🤖 [CityDetail] '${modelName}' 모델로 상세 정보 생성 시도...`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      
+      if (text) return text; 
+      
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ [CityDetail] '${modelName}' 모델 실패:`, errorMessage);
+      lastError = error;
+    }
+  }
+  throw lastError; 
+}
+
 export async function POST(req: Request) {
   try {
     const { cityName, country } = await req.json();
 
     if (!apiKey) {
-        console.error("API Key Missing");
         return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
     }
-
-    // 가장 안정적인 최신 플래시 모델 사용
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      // JSON 포맷 강제 (응답 파싱 에러 방지)
-      generationConfig: { responseMimeType: "application/json" } 
-    });
 
     const prompt = `
       너는 전문 여행 플래너야.
@@ -33,7 +56,7 @@ export async function POST(req: Request) {
       5. 추천 음식 (foods): 3가지 (이름, 설명).
       6. 3박 4일 추천 일정 (itinerary): Day 1~4 별 테마와 주요 동선.
 
-      반드시 아래 JSON 형식을 준수해줘.
+      반드시 아래 JSON 형식을 준수해줘. 마크다운 없이 순수 JSON만 줘.
       {
         "intro": "...",
         "bestSeason": "...",
@@ -47,16 +70,30 @@ export async function POST(req: Request) {
       }
     `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    // 모델 자동 전환 실행
+    const text = await generateWithFallback(prompt);
     
-    const data = JSON.parse(text);
+    // JSON 파싱
+    let data;
+    try {
+      let cleanText = text.replace(/```json|```/g, "").trim();
+      const firstBrace = cleanText.indexOf('{');
+      const lastBrace = cleanText.lastIndexOf('}');
+      
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+      }
+      data = JSON.parse(cleanText);
+    } catch (e) {
+      console.error("JSON Parsing Error:", text);
+      throw new Error("AI 응답 형식이 올바르지 않습니다.");
+    }
 
     return NextResponse.json(data);
 
   } catch (error: unknown) {
-    console.error("City Detail Error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("City Detail Error:", errorMessage);
     return NextResponse.json(
       { error: "정보 생성 중 오류가 발생했습니다." },
       { status: 500 }
