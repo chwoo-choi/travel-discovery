@@ -1,213 +1,235 @@
-import Link from "next/link";
-import { TopNavAuth } from "@/components/TopNavAuth"; // ✅ 1. 새 네비게이션 불러오기
+// app/bookmark/page.tsx
+'use client';
 
-// 🗑️ [삭제됨] 기존 function TopNav() {...} 코드는 이제 필요 없어서 지웠습니다.
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { TopNavAuth } from '@/components/TopNavAuth';
+
+// DB 데이터 타입 정의
+interface BookmarkItem {
+  id: string;
+  cityName: string;
+  country: string;
+  description: string;
+  price: string;
+  tags: string[];
+  emoji: string;
+  createdAt: string;
+}
 
 export default function BookmarkPage() {
-  return (
-    <div className="flex min-h-screen flex-col">
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1. 초기 데이터 로드 및 인증 체크
+  useEffect(() => {
+    // 로딩 중이면 대기
+    if (status === 'loading') return;
+
+    // 비로그인 상태면 로그인 페이지로
+    if (status === 'unauthenticated') {
+      alert('로그인이 필요한 페이지입니다.');
+      router.push('/login');
+      return;
+    }
+
+    // 로그인 상태면 데이터 가져오기
+    if (status === 'authenticated') {
+      fetchBookmarks();
+    }
+  }, [status, router]);
+
+  // API로부터 북마크 목록 가져오기
+  const fetchBookmarks = async () => {
+    try {
+      const res = await fetch('/api/bookmark');
+      if (!res.ok) throw new Error('데이터를 불러오는데 실패했습니다.');
       
-      {/* 👇👇👇 [수정된 부분] 기존 <TopNav /> 대신 이걸로 교체! 👇👇👇 */}
+      const responseData = await res.json();
+      // API 응답 구조: { count: number, data: BookmarkItem[] }
+      setBookmarks(responseData.data || []);
+    } catch (error) {
+      console.error('북마크 로딩 에러:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 북마크 삭제 (낙관적 업데이트 적용)
+  const handleRemove = async (cityName: string, id: string) => {
+    if (!confirm(`'${cityName}'을(를) 목록에서 삭제하시겠습니까?`)) return;
+
+    // 1. UI에서 먼저 제거 (사용자 경험 향상)
+    const prevBookmarks = [...bookmarks];
+    setBookmarks((prev) => prev.filter((item) => item.id !== id));
+
+    try {
+      // 2. 서버에 삭제 요청
+      const res = await fetch('/api/bookmark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cityName,
+          country: '', // 삭제 식별에는 cityName, id만 중요
+          description: '',
+          price: '',
+          tags: [],
+        }),
+      });
+
+      const result = await res.json();
+      
+      // 삭제 실패 시 롤백
+      if (result.action !== 'removed') {
+        setBookmarks(prevBookmarks);
+        alert('삭제에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (error) {
+      console.error('삭제 요청 실패:', error);
+      setBookmarks(prevBookmarks); // 에러 발생 시 롤백
+      alert('서버 오류로 삭제하지 못했습니다.');
+    }
+  };
+
+  // 로딩 스켈레톤 UI
+  if (status === 'loading' || loading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-[#F8F9FA]">
+        <TopNavAuth />
+        <main className="mx-auto w-full max-w-6xl px-4 py-10">
+          <div className="mb-8 h-8 w-48 animate-pulse rounded bg-gray-200"></div>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-64 rounded-3xl bg-gray-200 animate-pulse"></div>
+            ))}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // 로그인 체크 중이거나 비로그인 상태면 렌더링 안 함 (useEffect에서 리다이렉트 처리됨)
+  if (!session) return null;
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#F8F9FA]">
       <TopNavAuth />
-      {/* 👆👆👆 이제 로그인 상태(OOO님)가 여기서도 유지됩니다 */}
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-16 pt-8 md:pt-10">
-        {/* 헤더 */}
-        <header className="mb-6 md:mb-8">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-indigo-500">
-            내 북마크
+        {/* 헤더 섹션 */}
+        <header className="mb-8 md:mb-12">
+          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-indigo-600">
+            My Wishlist
           </p>
-          <h1 className="text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
-            마음에 드는 여행지를 한 곳에서 모아보세요.
+          <h1 className="text-3xl font-extrabold leading-tight text-gray-900 md:text-4xl">
+            {session.user?.name || '사용자'}님의 <br className="md:hidden" />
+            <span className="text-indigo-600">여행 컬렉션</span>
           </h1>
-          <p className="mt-2 text-xs text-gray-500 md:text-sm">
-            홈 화면과 결과 페이지에서 저장한 여행지가 이곳에 모입니다. 나중에
-            다시 비교하거나 플랜을 이어갈 수 있어요.
+          <p className="mt-3 text-sm text-gray-500">
+            마음에 드는 여행지를 저장하고 비교해보세요.
           </p>
         </header>
 
-        {/* 빈 상태 안내 + 액션 */}
-        <section className="mb-8 rounded-3xl bg-white/90 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.16)] backdrop-blur md:p-5">
-          <div className="flex flex-col items-start gap-3 text-left md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-800 md:text-base">
-                아직 저장된 북마크가 많지 않아요.
-              </h2>
-              <p className="mt-1 text-xs text-gray-500 md:text-sm">
-                관심 있는 도시를 발견했다면 북마크해 두고, 나중에 날짜와 예산을
-                바꿔 보면서 다시 비교해 보세요.
-              </p>
-              <p className="mt-1 text-[11px] text-gray-400">
-                ※ 현재는 UI 테스트용 더미 데이터가 표시되며, 나중에 실제 DB
-                연동으로 교체될 예정입니다.
-              </p>
+        {/* 컨텐츠 섹션 */}
+        {bookmarks.length === 0 ? (
+          // 1. 북마크가 없을 때 (Empty State)
+          <section className="flex flex-col items-center justify-center rounded-3xl bg-white px-6 py-20 text-center shadow-sm border border-gray-100">
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-50 text-4xl shadow-inner">
+              ✈️
             </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              아직 저장된 여행지가 없네요!
+            </h2>
+            <p className="mb-8 text-sm text-gray-500 max-w-md leading-relaxed">
+              어디로 떠날지 고민이신가요? <br />
+              AI에게 취향을 알려주고 딱 맞는 여행지를 추천받아보세요.
+            </p>
             <Link
               href="/"
-              className="mt-2 inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-gray-800 md:mt-0"
+              className="group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white transition-all duration-300 hover:bg-indigo-600 hover:shadow-lg hover:shadow-indigo-500/30"
             >
-              ✨ 여행지 탐색하러 가기
+              <span className="mr-2">✨</span> 여행지 탐색하러 가기
             </Link>
-          </div>
-        </section>
-
-        {/* 북마크 리스트 (더미 카드) */}
-        <section className="flex-1">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-800 md:text-base">
-              북마크한 여행지
-            </h2>
-            <span className="text-xs text-gray-400">
-              예시로 3개의 북마크 카드가 표시됩니다.
-            </span>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {/* 카드 1 */}
-            <article className="flex h-full flex-col rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.14)]">
-              <div className="mb-3 flex items-start justify-between gap-2">
+          </section>
+        ) : (
+          // 2. 북마크 리스트 (Grid Layout)
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {bookmarks.map((item) => (
+              <article
+                key={item.id}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-3xl bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100 border border-gray-100"
+              >
+                {/* 카드 내용 */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    오사카
-                  </h3>
-                  <p className="text-[11px] text-gray-500">
-                    일본 · 먹거리 & 유니버설 스튜디오
-                  </p>
-                </div>
-                <span className="rounded-full bg-yellow-50 px-2 py-1 text-[11px] font-semibold text-yellow-600">
-                  주말 여행 후보
-                </span>
-              </div>
-              <p className="mb-3 text-[11px] text-gray-500">
-                도톤보리, 유니버설 스튜디오, 교토 당일치기까지 한 번에
-                즐기기 좋아요.
-              </p>
-              <dl className="mb-3 space-y-1 text-[11px] text-gray-600">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">선호 테마</dt>
-                  <dd>맛집, 액티비티</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예산 등급</dt>
-                  <dd>스탠다드</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">최근 저장</dt>
-                  <dd>3일 전</dd>
-                </div>
-              </dl>
-              <div className="mt-auto flex items-center justify-between">
-                <div className="flex flex-wrap gap-1">
-                  <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                    #가까운여행
-                  </span>
-                  <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                    #유니버설
-                  </span>
-                </div>
-                <button className="text-[10px] font-medium text-gray-400 hover:text-red-400">
-                  북마크 해제
-                </button>
-              </div>
-            </article>
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-2xl shadow-inner">
+                        {item.emoji || '🌍'}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 leading-none mb-1">
+                          {item.cityName}
+                        </h3>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          {item.country}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-            {/* 카드 2 */}
-            <article className="flex h-full flex-col rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.14)]">
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    다낭
-                  </h3>
-                  <p className="text-[11px] text-gray-500">
-                    베트남 · 휴양 & 호이안
+                  <p className="mb-4 text-sm leading-relaxed text-gray-600 line-clamp-3">
+                    {item.description}
                   </p>
-                </div>
-                <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-600">
-                  여름 휴가 후보
-                </span>
-              </div>
-              <p className="mb-3 text-[11px] text-gray-500">
-                리조트 중심 일정과 호이안 야간 투어를 함께 넣기 좋은
-                구성입니다.
-              </p>
-              <dl className="mb-3 space-y-1 text-[11px] text-gray-600">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">선호 테마</dt>
-                  <dd>휴양, 가족여행</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예산 등급</dt>
-                  <dd>실속형 ~ 스탠다드</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">최근 저장</dt>
-                  <dd>1주 전</dd>
-                </div>
-              </dl>
-              <div className="mt-auto flex items-center justify-between">
-                <div className="flex flex-wrap gap-1">
-                  <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                    #리조트
-                  </span>
-                  <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                    #호이안
-                  </span>
-                </div>
-                <button className="text-[10px] font-medium text-gray-400 hover:text-red-400">
-                  북마크 해제
-                </button>
-              </div>
-            </article>
 
-            {/* 카드 3 */}
-            <article className="flex h-full flex-col rounded-3xl bg-white/95 p-4 shadow-[0_16px_40px_rgba(123,104,238,0.14)]">
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    바르셀로나
-                  </h3>
-                  <p className="text-[11px] text-gray-500">
-                    스페인 · 건축 & 바다
-                  </p>
+                  {/* 태그 리스트 */}
+                  <div className="mb-6 flex flex-wrap gap-2">
+                    {Array.isArray(item.tags) && item.tags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center rounded-lg bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors group-hover:bg-indigo-50 group-hover:text-indigo-600"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <span className="rounded-full bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-600">
-                  장기 여행 후보
-                </span>
-              </div>
-              <p className="mb-3 text-[11px] text-gray-500">
-                가우디 건축과 해변 산책을 함께 즐기기 좋아, 허니문이나 장기
-                여행으로 인기 있는 도시예요.
-              </p>
-              <dl className="mb-3 space-y-1 text-[11px] text-gray-600">
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">선호 테마</dt>
-                  <dd>문화, 야경</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">예산 등급</dt>
-                  <dd>스탠다드 ~ 프리미엄</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">최근 저장</dt>
-                  <dd>2주 전</dd>
-                </div>
-              </dl>
-              <div className="mt-auto flex items-center justify-between">
-                <div className="flex flex-wrap gap-1">
-                  <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                    #건축
+
+                {/* 하단 버튼 영역 */}
+                <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-4">
+                  <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                    {item.price}
                   </span>
-                  <span className="rounded-full bg-gray-50 px-2 py-1 text-[10px] text-gray-600">
-                    #해변
-                  </span>
+                  
+                  <div className="flex gap-2">
+                    {/* 상세 보기 버튼 */}
+                    <Link
+                      href={`/city/${item.id}?cityName=${encodeURIComponent(item.cityName)}&country=${encodeURIComponent(item.country)}`}
+                      className="rounded-full bg-gray-900 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-gray-700"
+                    >
+                      상세 보기
+                    </Link>
+                    
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={() => handleRemove(item.cityName, item.id)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                      title="북마크 삭제"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                        <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <button className="text-[10px] font-medium text-gray-400 hover:text-red-400">
-                  북마크 해제
-                </button>
-              </div>
-            </article>
+              </article>
+            ))}
           </div>
-        </section>
+        )}
       </main>
     </div>
   );

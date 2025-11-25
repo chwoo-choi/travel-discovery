@@ -1,15 +1,15 @@
 //  app/results/page.tsx
 "use client";
 
-// 🚨 빌드 에러 방지를 위한 동적 렌더링 강제 설정
 export const dynamic = "force-dynamic";
 
 import { TopNavAuth } from "@/components/TopNavAuth";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react"; // ✅ 인증 훅 추가
 
-// 데이터 타입 정의 (AI가 주는 JSON 구조와 일치)
+// 데이터 타입 정의
 type Recommendation = {
   cityName: string;
   country: string;
@@ -22,30 +22,35 @@ type Recommendation = {
   weather: string;
 };
 
-// 🔹 알맹이 컴포넌트 (검색 결과 로직)
+// 🔹 알맹이 컴포넌트
 function SearchResultsContent() {
-  const searchParams = useSearchParams(); 
-  
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { data: session } = useSession(); // ✅ 로그인 세션 정보 가져오기
+
   const [loading, setLoading] = useState(true);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  
+  // ✅ 북마크 상태 관리 (내가 북마크한 도시 이름들 저장)
+  const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
 
-  // URL 파라미터 받아오기
-  const destination = searchParams.get("destination") || "";
-  const people = searchParams.get("people") || "2명";
-  const budgetLevel = searchParams.get("budgetLevel") || "스탠다드";
-  const departureDate = searchParams.get("departureDate") || "";
-  const tripNights = searchParams.get("tripNights");
+  // 검색 파라미터 안전하게 가져오기
+  const destination = searchParams?.get("destination") || "";
+  const people = searchParams?.get("people") || "2명";
+  const budgetLevel = searchParams?.get("budgetLevel") || "스탠다드";
+  const departureDate = searchParams?.get("departureDate") || "";
+  const tripNights = searchParams?.get("tripNights");
 
   const dateText = departureDate ? `${departureDate} 출발` : "날짜 미정";
   const stayText = tripNights ? `· ${tripNights}박` : "";
 
+  // 1. 초기 로드: AI 추천 데이터 가져오기
   useEffect(() => {
     const fetchRecommendation = async () => {
       try {
         setLoading(true);
         
-        // 백엔드 API 호출
         const res = await fetch("/api/recommend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -62,7 +67,6 @@ function SearchResultsContent() {
 
         const result = await res.json();
         
-        // 결과가 배열인지 확인 후 상태 업데이트
         if (Array.isArray(result)) {
           setRecommendations(result);
         } else {
@@ -77,8 +81,90 @@ function SearchResultsContent() {
       }
     };
 
-    fetchRecommendation();
-  }, [destination, people, budgetLevel, departureDate, tripNights]);
+    if (searchParams) {
+        fetchRecommendation();
+    }
+  }, [searchParams, destination, people, budgetLevel, departureDate, tripNights]);
+
+  // 2. 초기 로드: 로그인 상태라면 기존 북마크 목록 가져오기 (하트 채우기 위함)
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/bookmark")
+        .then((res) => {
+            if(res.ok) return res.json();
+            return { data: [] };
+        })
+        .then((data) => {
+          if (data && Array.isArray(data.data)) {
+            // 기존에 북마크된 도시들의 이름을 Set에 저장
+            // [수정] any 제거 및 명시적 타입 지정으로 TS/ESLint 오류 해결
+            const bookmarkedSet = new Set<string>(
+              data.data.map((item: { cityName: string }) => item.cityName)
+            );
+            setBookmarkedCities(bookmarkedSet);
+          }
+        })
+        .catch((err) => console.error("북마크 로드 실패:", err));
+    }
+  }, [session]);
+
+  // ✅ 북마크 토글 핸들러
+  const toggleBookmark = async (city: Recommendation) => {
+    // 1. 비로그인 시 로그인 유도
+    if (!session) {
+      if (confirm("북마크 기능은 로그인이 필요합니다.\n로그인 페이지로 이동하시겠습니까?")) {
+        router.push("/login");
+      }
+      return;
+    }
+
+    const isBookmarked = bookmarkedCities.has(city.cityName);
+
+    // 2. 낙관적 업데이트 (UI 먼저 변경)
+    setBookmarkedCities((prev) => {
+      const newSet = new Set(prev);
+      if (isBookmarked) {
+        newSet.delete(city.cityName);
+      } else {
+        newSet.add(city.cityName);
+      }
+      return newSet;
+    });
+
+    try {
+      // 3. API 호출
+      const res = await fetch("/api/bookmark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cityName: city.cityName,
+          country: city.country,
+          description: city.reason, // AI 추천 이유를 설명으로 저장
+          // 가격 정보를 합쳐서 저장 (예: ✈️ 50만 / 🏨 20만)
+          price: `✈️ ${city.flightPrice} / 🏨 ${city.hotelPrice}`, 
+          tags: city.tags,
+          emoji: city.emoji,
+        }),
+      });
+
+      if (!res.ok) throw new Error("북마크 처리에 실패했습니다.");
+
+    } catch (error) {
+      console.error("북마크 에러:", error);
+      alert("서버 오류로 북마크 저장에 실패했습니다.");
+      
+      // 4. 에러 발생 시 UI 롤백
+      setBookmarkedCities((prev) => {
+        const newSet = new Set(prev);
+        if (isBookmarked) {
+          newSet.add(city.cityName); // 원래대로 복구
+        } else {
+          newSet.delete(city.cityName);
+        }
+        return newSet;
+      });
+    }
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col">
@@ -146,61 +232,78 @@ function SearchResultsContent() {
       {!loading && !error && recommendations.length > 0 && (
         <>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-10">
-            {recommendations.map((city, index) => (
-              <div 
-                key={index} 
-                className="group relative flex flex-col overflow-hidden rounded-[2rem] bg-white shadow-[0_18px_40px_rgba(123,104,238,0.12)] ring-1 ring-gray-100 transition-all hover:-translate-y-1 hover:shadow-[0_25px_50px_rgba(123,104,238,0.2)] animate-fade-in-up"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                {/* 상단 그라디언트 배경 (브랜드 컬러) */}
-                <div className="absolute top-0 left-0 h-32 w-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] opacity-90 group-hover:opacity-100 transition-opacity"></div>
+            {recommendations.map((city, index) => {
+                const isBookmarked = bookmarkedCities.has(city.cityName);
                 
-                {/* AI 매칭 점수 배지 */}
-                <div className="absolute top-4 right-4 z-10 flex items-center gap-1 rounded-full bg-white/30 px-2.5 py-1 backdrop-blur-md border border-white/20">
-                  <span className="text-[10px] font-bold text-white">{city.matchScore}% 일치</span>
-                </div>
-
-                {/* 카드 내용 */}
-                <div className="relative z-10 mt-12 flex flex-col items-center px-6 pb-6 text-center h-full">
-                  {/* 둥실거리는 이모지 */}
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-lg text-5xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                    {city.emoji}
-                  </div>
-
-                  {/* 도시 정보 */}
-                  <h2 className="text-xl font-extrabold text-gray-900">{city.cityName}</h2>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-4">{city.country}</p>
-
-                  {/* 태그 */}
-                  <div className="flex flex-wrap justify-center gap-1.5 mb-5">
-                    {city.tags.slice(0, 3).map((tag, tIndex) => (
-                      <span key={tIndex} className="rounded-full bg-gray-50 px-2 py-1 text-[10px] font-medium text-gray-600 border border-gray-100">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* 추천 이유 (수정된 부분: " -> &quot;) */}
-                  <div className="w-full rounded-2xl bg-indigo-50/50 p-4 mb-4 text-left">
-                    <p className="text-xs leading-relaxed text-gray-700 line-clamp-3">
-                      &quot;{city.reason}&quot;
-                    </p>
-                  </div>
-
-                  {/* 가격 정보 */}
-                  <div className="mt-auto w-full space-y-2">
-                    <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-3 py-2">
-                      <span className="text-[10px] text-gray-500">✈️ 항공권</span>
-                      <span className="text-xs font-bold text-gray-900">{city.flightPrice}</span>
+                return (
+                  <div 
+                    key={index} 
+                    className="group relative flex flex-col overflow-hidden rounded-[2rem] bg-white shadow-[0_18px_40px_rgba(123,104,238,0.12)] ring-1 ring-gray-100 transition-all hover:-translate-y-1 hover:shadow-[0_25px_50px_rgba(123,104,238,0.2)] animate-fade-in-up"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    {/* 상단 그라디언트 배경 */}
+                    <div className="absolute top-0 left-0 h-32 w-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                    
+                    {/* ✅ [수정됨] AI 매칭 점수 배지 (위치를 왼쪽 상단으로 이동) */}
+                    <div className="absolute top-4 left-4 z-10 flex items-center gap-1 rounded-full bg-white/30 px-2.5 py-1 backdrop-blur-md border border-white/20">
+                      <span className="text-[10px] font-bold text-white">{city.matchScore}% 일치</span>
                     </div>
-                    <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-3 py-2">
-                      <span className="text-[10px] text-gray-500">🏨 숙박(1박)</span>
-                      <span className="text-xs font-bold text-gray-900">{city.hotelPrice}</span>
+
+                    {/* ✅ [추가됨] 하트 북마크 버튼 (오른쪽 상단 배치) */}
+                    <button
+                        onClick={() => toggleBookmark(city)}
+                        className="absolute top-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm transition-transform hover:scale-110 active:scale-95"
+                        title={isBookmarked ? "북마크 해제" : "북마크 저장"}
+                    >
+                        {isBookmarked ? (
+                            <span className="text-lg text-red-500">❤️</span>
+                        ) : (
+                            <span className="text-lg opacity-40 grayscale hover:opacity-100 hover:grayscale-0">🤍</span>
+                        )}
+                    </button>
+
+                    {/* 카드 내용 */}
+                    <div className="relative z-10 mt-12 flex flex-col items-center px-6 pb-6 text-center h-full">
+                      {/* 이모지 */}
+                      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-lg text-5xl mb-3 group-hover:scale-110 transition-transform duration-300">
+                        {city.emoji}
+                      </div>
+
+                      {/* 도시 정보 */}
+                      <h2 className="text-xl font-extrabold text-gray-900">{city.cityName}</h2>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-4">{city.country}</p>
+
+                      {/* 태그 */}
+                      <div className="flex flex-wrap justify-center gap-1.5 mb-5">
+                        {city.tags.slice(0, 3).map((tag, tIndex) => (
+                          <span key={tIndex} className="rounded-full bg-gray-50 px-2 py-1 text-[10px] font-medium text-gray-600 border border-gray-100">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* 추천 이유 */}
+                      <div className="w-full rounded-2xl bg-indigo-50/50 p-4 mb-4 text-left">
+                        <p className="text-xs leading-relaxed text-gray-700 line-clamp-3">
+                          &quot;{city.reason}&quot;
+                        </p>
+                      </div>
+
+                      {/* 가격 정보 */}
+                      <div className="mt-auto w-full space-y-2">
+                        <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-3 py-2">
+                          <span className="text-[10px] text-gray-500">✈️ 항공권</span>
+                          <span className="text-xs font-bold text-gray-900">{city.flightPrice}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-3 py-2">
+                          <span className="text-[10px] text-gray-500">🏨 숙박(1박)</span>
+                          <span className="text-xs font-bold text-gray-900">{city.hotelPrice}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+            })}
           </div>
 
           {/* 하단 액션 버튼 */}
