@@ -1,7 +1,9 @@
 // app/layout.tsx
+// app/layout.tsx
 import type { Metadata } from "next";
 import "react-day-picker/dist/style.css";
 import "./globals.css";
+import AuthSessionProvider from "@/components/AuthSessionProvider";
 
 export const metadata: Metadata = {
   title: "여행의 발견 - 스마트 트래블 플래너",
@@ -24,10 +26,11 @@ export default function RootLayout({
           antialiased
         "
       >
-        {children}
+        <AuthSessionProvider>{children}</AuthSessionProvider>
       </body>
     </html>
   );
 }
+
 
 
