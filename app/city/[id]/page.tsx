@@ -1,5 +1,4 @@
 // app/city/[id]/page.tsx
-// app/city/[id]/page.tsx
 "use client";
 
 export const dynamic = "force-dynamic";
@@ -113,7 +112,6 @@ function CityDetailContent() {
         }
 
         setData(result);
-
       } catch (err) {
         console.error("City Detail Error:", err);
         setError("정보를 생성하는 도중 문제가 발생했습니다. 다시 시도해주세요.");
@@ -186,7 +184,9 @@ function CityDetailContent() {
         <h2 className="mb-8 flex items-center text-2xl font-bold text-gray-900">
           <span className="mr-2 text-3xl">🗓️</span> 여행 추천 코스
           {durationInfo?.text && (
-            <span className="ml-2 text-base font-semibold text-indigo-600">({durationInfo.text})</span>
+            <span className="ml-2 text-base font-semibold text-indigo-600">
+              ({durationInfo.text})
+            </span>
           )}
         </h2>
         {durationInfo?.periodText && (
@@ -194,7 +194,10 @@ function CityDetailContent() {
         )}
         <div className="space-y-8 pl-4">
           {data?.itinerary.map((day, idx) => (
-            <div key={idx} className="relative border-l-2 border-indigo-100 pl-8 pb-2 last:border-0">
+            <div
+              key={idx}
+              className="relative border-l-2 border-indigo-100 pl-8 pb-2 last:border-0"
+            >
               <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-indigo-600 ring-4 ring-white"></div>
 
               <div className="mb-2 flex items-center gap-3">

@@ -1,5 +1,4 @@
 // app/results/page.tsx
-// app/results/page.tsx
 "use client";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +30,9 @@ function SearchResultsContent() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
+  const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(
+    new Set()
+  );
 
   const destination = searchParams?.get("destination") || "";
   const people = searchParams?.get("people") || "2명";
@@ -69,7 +70,6 @@ function SearchResultsContent() {
         } else {
           setRecommendations([result]);
         }
-
       } catch (err) {
         setError("여행지를 추천하는 도중 오류가 발생했습니다.");
         console.error(err);
@@ -79,7 +79,7 @@ function SearchResultsContent() {
     };
 
     if (searchParams) {
-        fetchRecommendation();
+      fetchRecommendation();
     }
   }, [searchParams, destination, people, budgetLevel, departureDate, tripNights]);
 
@@ -87,8 +87,8 @@ function SearchResultsContent() {
     if (session?.user) {
       fetch("/api/bookmark")
         .then((res) => {
-            if(res.ok) return res.json();
-            return { data: [] };
+          if (res.ok) return res.json();
+          return { data: [] };
         })
         .then((data) => {
           if (data && Array.isArray(data.data)) {
@@ -105,8 +105,8 @@ function SearchResultsContent() {
   const handleBookmark = async (city: Recommendation) => {
     // 비로그인 체크
     if (!session) {
-      if(confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
-          router.push("/login");
+      if (confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
+        router.push("/login");
       }
       return;
     }
@@ -136,10 +136,6 @@ function SearchResultsContent() {
       });
 
       if (!res.ok) throw new Error("저장 실패");
-
-      // 성공 메시지는 선택 사항 (너무 자주 뜨면 불편할 수 있어 제거하거나 유지 가능)
-      // alert(`'${city.cityName}' 북마크 ${isBookmarked ? "해제" : "저장"} 완료!`);
-
     } catch (error) {
       console.error(error);
       alert("북마크 저장 중 오류가 발생했습니다.");
@@ -188,7 +184,10 @@ function SearchResultsContent() {
       {loading && (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex h-80 w-full flex-col items-center justify-center rounded-3xl bg-white shadow-[0_10px_30px_rgba(0,0,0,0.04)] border border-gray-50 animate-pulse">
+            <div
+              key={i}
+              className="flex h-80 w-full flex-col items-center justify-center rounded-3xl bg-white shadow-[0_10px_30px_rgba(0,0,0,0.04)] border border-gray-50 animate-pulse"
+            >
               <div className="h-12 w-12 rounded-full bg-gray-100 mb-4"></div>
               <div className="h-4 w-32 rounded bg-gray-100 mb-2"></div>
               <div className="h-3 w-20 rounded bg-gray-50"></div>
@@ -201,7 +200,10 @@ function SearchResultsContent() {
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-3xl bg-gray-50 text-center p-6">
           <span className="text-4xl mb-3">😵</span>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button onClick={() => window.location.reload()} className="rounded-2xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-gray-800 transition-transform hover:scale-105">
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-2xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-gray-800 transition-transform hover:scale-105"
+          >
             다시 시도하기
           </button>
         </div>
@@ -221,7 +223,9 @@ function SearchResultsContent() {
                 >
                   <div className="absolute top-0 left-0 h-32 w-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] opacity-90 group-hover:opacity-100 transition-opacity"></div>
                   <div className="absolute top-4 left-4 z-10 flex items-center gap-1 rounded-full bg-white/30 px-2.5 py-1 backdrop-blur-md border border-white/20">
-                    <span className="text-[10px] font-bold text-white">{city.matchScore}% 일치</span>
+                    <span className="text-[10px] font-bold text-white">
+                      {city.matchScore}% 일치
+                    </span>
                   </div>
 
                   <div className="relative z-10 mt-12 flex flex-col items-center px-6 pb-6 text-center h-full">
@@ -229,12 +233,19 @@ function SearchResultsContent() {
                       {city.emoji}
                     </div>
 
-                    <h2 className="text-xl font-extrabold text-gray-900">{city.cityName}</h2>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-4">{city.country}</p>
+                    <h2 className="text-xl font-extrabold text-gray-900">
+                      {city.cityName}
+                    </h2>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-4">
+                      {city.country}
+                    </p>
 
                     <div className="flex flex-wrap justify-center gap-1.5 mb-5">
                       {city.tags.slice(0, 3).map((tag, tIndex) => (
-                        <span key={tIndex} className="rounded-full bg-gray-50 px-2 py-1 text-[10px] font-medium text-gray-600 border border-gray-100">
+                        <span
+                          key={tIndex}
+                          className="rounded-full bg-gray-50 px-2 py-1 text-[10px] font-medium text-gray-600 border border-gray-100"
+                        >
                           {tag}
                         </span>
                       ))}
@@ -248,27 +259,39 @@ function SearchResultsContent() {
 
                     <div className="mt-auto w-full space-y-2">
                       <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 px-3 py-2">
-                        <span className="text-[10px] text-gray-500">✈️ 항공권</span>
-                        <span className="text-xs font-bold text-gray-900">{city.flightPrice}</span>
+                        <span className="text-[10px] text-gray-500">
+                          ✈️ 항공권
+                        </span>
+                        <span className="text-xs font-bold text-gray-900">
+                          {city.flightPrice}
+                        </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-2 mt-2">
-                          <Link
-                             href={`/city/${index}?cityName=${encodeURIComponent(city.cityName)}&country=${encodeURIComponent(city.country)}&startDate=${encodeURIComponent(departureDate)}&endDate=${encodeURIComponent(returnDate)}&tripNights=${tripNights || "3"}`}
-                             className="flex-1 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white text-center hover:bg-gray-800 transition-colors"
-                           >
-                             상세 보기
-                           </Link>
-                           <button
-                             onClick={() => handleBookmark(city)}
-                             className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors shadow-sm"
-                           >
-                             {isBookmarked ? (
-                               <span className="text-red-500 text-lg">♥</span>
-                             ) : (
-                               <span className="text-lg">♡</span>
-                             )}
-                           </button>
+                        <Link
+                          href={`/city/${index}?cityName=${encodeURIComponent(
+                            city.cityName
+                          )}&country=${encodeURIComponent(
+                            city.country
+                          )}&startDate=${encodeURIComponent(
+                            departureDate
+                          )}&endDate=${encodeURIComponent(
+                            returnDate
+                          )}&tripNights=${tripNights || "3"}`}
+                          className="flex-1 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white text-center hover:bg-gray-800 transition-colors"
+                        >
+                          상세 보기
+                        </Link>
+                        <button
+                          onClick={() => handleBookmark(city)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors shadow-sm"
+                        >
+                          {isBookmarked ? (
+                            <span className="text-red-500 text-lg">♥</span>
+                          ) : (
+                            <span className="text-lg">♡</span>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -277,7 +300,7 @@ function SearchResultsContent() {
             })}
           </div>
           <div className="flex justify-center pb-10">
-             <Link href="/">
+            <Link href="/">
               <button className="rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white shadow-lg hover:bg-gray-800 hover:scale-105 transition-all">
                 ↺ 다시 검색하기
               </button>
@@ -294,11 +317,13 @@ export default function ResultsPage() {
     <div className="flex min-h-screen flex-col bg-white">
       <TopNavAuth />
       <main className="flex flex-1 justify-center px-4 pt-8 md:pt-10">
-        <Suspense fallback={
-          <div className="flex h-96 w-full items-center justify-center">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#6f6bff]"></div>
-          </div>
-        }>
+        <Suspense
+          fallback={
+            <div className="flex h-96 w-full items-center justify-center">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#6f6bff]"></div>
+            </div>
+          }
+        >
           <SearchResultsContent />
         </Suspense>
       </main>

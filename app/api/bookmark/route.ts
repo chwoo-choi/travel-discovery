@@ -1,5 +1,4 @@
 // app/api/bookmark/route.ts
-// app/api/bookmark/route.ts
 
 // 🚨 API 응답 캐싱 방지 (항상 최신 데이터 로드)
 export const dynamic = "force-dynamic";
@@ -125,3 +124,4 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ message: "Server Error" }, { status: 500 });
   }
 }
+

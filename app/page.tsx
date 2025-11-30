@@ -1,5 +1,4 @@
 // app/page.tsx
-// app/page.tsx
 "use client";
 
 import "react-day-picker/dist/style.css";
@@ -78,7 +77,6 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
-
       <TopNavAuth />
 
       {/* 메인 콘텐츠 */}
@@ -147,9 +145,7 @@ export default function HomePage() {
                       setIsReturnOpen(false);
                     }}
                     value={
-                      departureDate
-                        ? format(departureDate, "yyyy-MM-dd")
-                        : ""
+                      departureDate ? format(departureDate, "yyyy-MM-dd") : ""
                     }
                     placeholder="년-월-일"
                     className="w-full cursor-pointer rounded-2xl border border-transparent bg-gray-50 px-3 py-2.5 text-xs md:text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
@@ -186,9 +182,7 @@ export default function HomePage() {
                       setIsReturnOpen((v) => !v);
                       setIsDepartureOpen(false);
                     }}
-                    value={
-                      returnDate ? format(returnDate, "yyyy-MM-dd") : ""
-                    }
+                    value={returnDate ? format(returnDate, "yyyy-MM-dd") : ""}
                     placeholder="년-월-일"
                     className="w-full cursor-pointer rounded-2xl border border-transparent bg-gray-50 px-3 py-2.5 text-xs md:text-sm text-gray-900 outline-none ring-1 ring-gray-100 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#7b6bff]"
                   />
@@ -286,8 +280,7 @@ export default function HomePage() {
       {/* 채팅 플로팅 버튼 (UI만) */}
       <button
         type="button"
-        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bf
-f] to-[#ba7bff] text-xl text-white shadow-[0_18px_40px_rgba(123,104,238,0.6)]"
+        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] text-xl text-white shadow-[0_18px_40px_rgba(123,104,238,0.6)]"
       >
         💬
       </button>

@@ -1,5 +1,4 @@
 // app/api/city/detail/route.ts
-// app/api/city/detail/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import { differenceInCalendarDays, parseISO, isAfter, isValid } from "date-fns";
@@ -7,11 +6,7 @@ import { differenceInCalendarDays, parseISO, isAfter, isValid } from "date-fns";
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-const MODELS_TO_TRY = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-flash-latest"
-];
+const MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
 
 // 자동 재시도 함수
 async function generateWithFallback(prompt: string) {
@@ -27,7 +22,6 @@ async function generateWithFallback(prompt: string) {
       const text = response.text();
 
       if (text) return text;
-
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.warn(`⚠️ [CityDetail] '${modelName}' 모델 실패:`, errorMessage);
@@ -42,17 +36,13 @@ export async function POST(req: Request) {
     const { cityName, country, startDate, endDate, tripNights } = await req.json();
 
     if (!apiKey) {
-        return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
+      return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
     }
 
     const start = startDate ? parseISO(startDate) : null;
     const end = endDate ? parseISO(endDate) : null;
     const hasValidDates =
-      start &&
-      end &&
-      isValid(start) &&
-      isValid(end) &&
-      !isAfter(start, end);
+      start && end && isValid(start) && isValid(end) && !isAfter(start, end);
 
     let durationText = "3박 4일"; // 기본값
     let days = 4; // 기본값
@@ -109,8 +99,8 @@ export async function POST(req: Request) {
     let data;
     try {
       let cleanText = text.replace(/```json|```/g, "").trim();
-      const firstBrace = cleanText.indexOf('{');
-      const lastBrace = cleanText.lastIndexOf('}');
+      const firstBrace = cleanText.indexOf("{");
+      const lastBrace = cleanText.lastIndexOf("}");
 
       if (firstBrace !== -1 && lastBrace !== -1) {
         cleanText = cleanText.substring(firstBrace, lastBrace + 1);
@@ -122,7 +112,6 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(data);
-
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("City Detail Error:", errorMessage);
@@ -132,3 +121,4 @@ export async function POST(req: Request) {
     );
   }
 }
+
