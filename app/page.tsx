@@ -1,12 +1,11 @@
 // app/page.tsx
+// app/page.tsx
 "use client";
 
-// ✅ [핵심 수정] 캘린더 스타일 CSS를 불러옵니다. (이게 없어서 깨져 보였던 것입니다)
 import "react-day-picker/dist/style.css";
 
-import { TopNavAuth } from "@/components/TopNavAuth"; 
+import { TopNavAuth } from "@/components/TopNavAuth";
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DayPicker } from "react-day-picker";
 import { format, differenceInCalendarDays, isAfter } from "date-fns";
@@ -79,7 +78,7 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      
+
       <TopNavAuth />
 
       {/* 메인 콘텐츠 */}
@@ -287,7 +286,8 @@ export default function HomePage() {
       {/* 채팅 플로팅 버튼 (UI만) */}
       <button
         type="button"
-        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] text-xl text-white shadow-[0_18px_40px_rgba(123,104,238,0.6)]"
+        className="fixed bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6f6bf
+f] to-[#ba7bff] text-xl text-white shadow-[0_18px_40px_rgba(123,104,238,0.6)]"
       >
         💬
       </button>

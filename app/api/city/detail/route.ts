@@ -1,6 +1,8 @@
 // app/api/city/detail/route.ts
+// app/api/city/detail/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+import { differenceInCalendarDays, parseISO, isAfter, isValid } from "date-fns";
 
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
@@ -19,52 +21,65 @@ async function generateWithFallback(prompt: string) {
     try {
       console.log(`🤖 [CityDetail] '${modelName}' 모델로 상세 정보 생성 시도...`);
       const model = genAI.getGenerativeModel({ model: modelName });
-      
+
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
-      
-      if (text) return text; 
-      
+
+      if (text) return text;
+
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.warn(`⚠️ [CityDetail] '${modelName}' 모델 실패:`, errorMessage);
       lastError = error;
     }
   }
-  throw lastError; 
+  throw lastError;
 }
 
 export async function POST(req: Request) {
   try {
-    // ✅ [수정 1] 프론트엔드에서 보낸 날짜 정보(startDate, endDate)를 함께 받습니다.
-    const { cityName, country, startDate, endDate } = await req.json();
+    const { cityName, country, startDate, endDate, tripNights } = await req.json();
 
     if (!apiKey) {
         return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
     }
 
-    // ✅ [수정 2] 날짜 차이를 계산하여 'N박 M일' 텍스트를 생성하는 로직 추가
+    const start = startDate ? parseISO(startDate) : null;
+    const end = endDate ? parseISO(endDate) : null;
+    const hasValidDates =
+      start &&
+      end &&
+      isValid(start) &&
+      isValid(end) &&
+      !isAfter(start, end);
+
     let durationText = "3박 4일"; // 기본값
     let days = 4; // 기본값
+    let periodText = "";
 
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-      
-      const nights = diffDays;     // 박
-      days = diffDays + 1;         // 일 (Day)
+    if (hasValidDates) {
+      const diffDays = Math.max(differenceInCalendarDays(end!, start!), 0);
+      const nights = diffDays; // 박
+      days = diffDays + 1; // 일 (Day)
+      durationText = `${nights}박 ${days}일`;
+      periodText = `${startDate} ~ ${endDate}`;
+    } else if (
+      tripNights !== undefined &&
+      tripNights !== null &&
+      tripNights !== "" &&
+      !Number.isNaN(Number(tripNights))
+    ) {
+      const nights = Math.max(Number(tripNights), 0);
+      days = nights + 1;
       durationText = `${nights}박 ${days}일`;
     }
 
-    // ✅ [수정 3] 프롬프트에 계산된 durationText와 days 변수를 적용
     const prompt = `
       너는 전문 여행 플래너야.
       "${country} ${cityName}" 여행을 위한 알찬 정보를 알려줘.
-      여행 기간은 ${startDate}부터 ${endDate}까지, 총 ${durationText}이야.
-      
+      여행 기간은 ${periodText ? `${periodText}, ` : ""}총 ${durationText}이야.
+
       [필수 포함 내용]
       1. 도시 소개 (intro): 2~3문장으로 매력 어필.
       2. 여행하기 좋은 계절 (bestSeason).
@@ -89,19 +104,19 @@ export async function POST(req: Request) {
 
     // 모델 자동 전환 실행
     const text = await generateWithFallback(prompt);
-    
+
     // JSON 파싱
     let data;
     try {
       let cleanText = text.replace(/```json|```/g, "").trim();
       const firstBrace = cleanText.indexOf('{');
       const lastBrace = cleanText.lastIndexOf('}');
-      
+
       if (firstBrace !== -1 && lastBrace !== -1) {
         cleanText = cleanText.substring(firstBrace, lastBrace + 1);
       }
       data = JSON.parse(cleanText);
-    } catch (e) {
+    } catch {
       console.error("JSON Parsing Error:", text);
       throw new Error("AI 응답 형식이 올바르지 않습니다.");
     }

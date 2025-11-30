@@ -1,4 +1,5 @@
 // app/api/bookmark/route.ts
+// app/api/bookmark/route.ts
 
 // 🚨 API 응답 캐싱 방지 (항상 최신 데이터 로드)
 export const dynamic = "force-dynamic";
@@ -15,19 +16,19 @@ const JWT_SECRET = process.env.JWT_SECRET || "default-secret-key";
 async function getUserId() {
   const cookieStore = await cookies(); // Next.js 15+ 호환
   const token = cookieStore.get("token")?.value;
-  
+
   if (!token) return null;
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { sub: string };
     return decoded.sub;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
 // 1. 북마크 조회 (GET)
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const userId = await getUserId();
     if (!userId) {
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
       let tags = [];
       try {
         tags = b.tags ? JSON.parse(b.tags as string) : [];
-      } catch (e) {
+      } catch {
         tags = [];
       }
       return { ...b, tags };
@@ -112,7 +113,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     await prisma.bookmark.delete({
-      where: { 
+      where: {
         id: bookmarkId,
         userId, // 내 북마크만 삭제 가능하도록 안전장치
       },

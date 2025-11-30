@@ -1,4 +1,5 @@
 // app/results/page.tsx
+// app/results/page.tsx
 "use client";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react"; // 👈 [체크] 북마크 기능에 필요한 훅이 빠져있어 추가했습니다.
+import { useSession } from "next-auth/react";
 
 type Recommendation = {
   cityName: string;
@@ -24,31 +25,29 @@ type Recommendation = {
 function SearchResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { data: session } = useSession(); // 👈 [체크] 로그인 상태 확인용
+  const { data: session } = useSession();
 
   const [loading, setLoading] = useState(true);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // 북마크 상태 관리 (하트 색상 유지용)
   const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
 
   const destination = searchParams?.get("destination") || "";
   const people = searchParams?.get("people") || "2명";
   const budgetLevel = searchParams?.get("budgetLevel") || "스탠다드";
   const departureDate = searchParams?.get("departureDate") || "";
-  // ✅ [확인] 여행 박수 정보 가져오기
-  const tripNights = searchParams?.get("tripNights") || "3"; 
+  const returnDate = searchParams?.get("returnDate") || "";
+  const tripNights = searchParams?.get("tripNights") || "3";
 
   const dateText = departureDate ? `${departureDate} 출발` : "날짜 미정";
   const stayText = tripNights ? `· ${tripNights}박` : "";
 
-  // 1. 추천 데이터 가져오기
   useEffect(() => {
     const fetchRecommendation = async () => {
       try {
         setLoading(true);
-        
+
         const res = await fetch("/api/recommend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -64,7 +63,7 @@ function SearchResultsContent() {
         if (!res.ok) throw new Error("추천 정보를 가져오지 못했습니다.");
 
         const result = await res.json();
-        
+
         if (Array.isArray(result)) {
           setRecommendations(result);
         } else {
@@ -84,7 +83,6 @@ function SearchResultsContent() {
     }
   }, [searchParams, destination, people, budgetLevel, departureDate, tripNights]);
 
-  // 2. [추가] 로그인 상태라면 기존 북마크 목록 가져오기 (하트 채우기)
   useEffect(() => {
     if (session?.user) {
       fetch("/api/bookmark")
@@ -104,7 +102,6 @@ function SearchResultsContent() {
     }
   }, [session]);
 
-  // 3. 북마크 핸들러 (토글 방식 + 낙관적 업데이트)
   const handleBookmark = async (city: Recommendation) => {
     // 비로그인 체크
     if (!session) {
@@ -217,8 +214,8 @@ function SearchResultsContent() {
               const isBookmarked = bookmarkedCities.has(city.cityName);
 
               return (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className="group relative flex flex-col overflow-hidden rounded-[2rem] bg-white shadow-[0_18px_40px_rgba(123,104,238,0.12)] ring-1 ring-gray-100 transition-all hover:-translate-y-1 hover:shadow-[0_25px_50px_rgba(123,104,238,0.2)] animate-fade-in-up"
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
@@ -254,16 +251,15 @@ function SearchResultsContent() {
                         <span className="text-[10px] text-gray-500">✈️ 항공권</span>
                         <span className="text-xs font-bold text-gray-900">{city.flightPrice}</span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between gap-2 mt-2">
-                           {/* ✅ [수정 완료] tripNights 파라미터 추가 */}
-                           <Link
-                             href={`/city/${index}?cityName=${encodeURIComponent(city.cityName)}&country=${encodeURIComponent(city.country)}&tripNights=${tripNights || "3"}`}
+                          <Link
+                             href={`/city/${index}?cityName=${encodeURIComponent(city.cityName)}&country=${encodeURIComponent(city.country)}&startDate=${encodeURIComponent(departureDate)}&endDate=${encodeURIComponent(returnDate)}&tripNights=${tripNights || "3"}`}
                              className="flex-1 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white text-center hover:bg-gray-800 transition-colors"
                            >
                              상세 보기
                            </Link>
-                           <button 
+                           <button
                              onClick={() => handleBookmark(city)}
                              className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors shadow-sm"
                            >

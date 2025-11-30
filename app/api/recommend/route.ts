@@ -1,4 +1,5 @@
 // app/api/recommend/route.ts
+// app/api/recommend/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
@@ -9,7 +10,7 @@ const genAI = new GoogleGenerativeAI(apiKey || "");
 const MODELS_TO_TRY = [
   "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-flash-latest" 
+  "gemini-flash-latest"
 ];
 
 // 자동 재시도 함수
@@ -20,13 +21,13 @@ async function generateWithFallback(prompt: string) {
     try {
       console.log(`🤖 [Gemini] '${modelName}' 모델로 요청 시도 중...`);
       const model = genAI.getGenerativeModel({ model: modelName });
-      
+
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
-      
+
       if (text) return text; // 성공하면 반환
-      
+
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.warn(`⚠️ [Gemini] '${modelName}' 모델 실패:`, errorMessage);
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
     const prompt = `
       너는 한국인 여행객을 위한 전문 여행 플래너야.
       아래 사용자 조건에 맞춰서 **서로 다른 매력을 가진 여행지 6곳**을 추천해줘.
-      
+
       [사용자 조건]
       - 인원: ${people}
       - 예산 등급: ${budgetLevel}
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
       let cleanText = text.replace(/```json|```/g, "").trim();
       const firstBracket = cleanText.indexOf('[');
       const lastBracket = cleanText.lastIndexOf(']');
-      
+
       if (firstBracket !== -1 && lastBracket !== -1) {
         cleanText = cleanText.substring(firstBracket, lastBracket + 1);
       }
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
       data = JSON.parse(cleanText);
       if (!Array.isArray(data)) data = [data];
 
-    } catch (parseError) {
+    } catch {
       console.error("❌ [JSON Parse Error]:", text);
       throw new Error("AI 응답 형식이 올바르지 않습니다.");
     }
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     // 🚨 [수정됨] any 제거 및 타입 안전하게 에러 메시지 추출
     let errorMessage = "알 수 없는 오류가 발생했습니다.";
-    
+
     if (error instanceof Error) {
       errorMessage = error.message;
     } else {

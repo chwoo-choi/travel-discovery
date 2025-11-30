@@ -1,17 +1,14 @@
 // app/city/[id]/page.tsx
+// app/city/[id]/page.tsx
 "use client";
 
-// 🚨 빌드 에러 방지용: 동적 페이지로 강제 설정
 export const dynamic = "force-dynamic";
 
 import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { differenceInCalendarDays, parseISO, isAfter, isValid } from "date-fns";
 import Link from "next/link";
-
-// ----------------------------------------------------------------------
-// ✅ 데이터 타입 정의
-// ----------------------------------------------------------------------
 
 interface PlaceDetail {
   name: string;
@@ -33,44 +30,76 @@ interface CityDetailData {
   itinerary: DayItinerary[];
 }
 
-// ----------------------------------------------------------------------
-// ✅ 상세 페이지 컨텐츠 (알맹이 컴포넌트)
-// ----------------------------------------------------------------------
-
 function CityDetailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // URL 쿼리 파라미터에서 도시명과 국가 가져오기
   const cityName = searchParams?.get("cityName") || "";
   const country = searchParams?.get("country") || "";
-  
-  // ✅ [수정 1] URL에서 날짜 정보를 추가로 가져옵니다.
+  const tripNights = searchParams?.get("tripNights") || "";
+
   const startDate = searchParams?.get("startDate") || "";
   const endDate = searchParams?.get("endDate") || "";
+
+  const durationInfo = useMemo(() => {
+    if (startDate && endDate) {
+      const start = parseISO(startDate);
+      const end = parseISO(endDate);
+
+      if (!isValid(start) || !isValid(end) || isAfter(start, end)) {
+        return null;
+      }
+
+      const diffDays = differenceInCalendarDays(end, start);
+      const nights = Math.max(diffDays, 0);
+      const days = nights + 1;
+
+      return {
+        nights,
+        days,
+        text: `${nights}박 ${days}일`,
+        periodText: `${startDate} ~ ${endDate}`,
+      };
+    }
+
+    if (tripNights) {
+      const parsedNights = Number(tripNights);
+      if (Number.isNaN(parsedNights)) {
+        return null;
+      }
+
+      const nights = Math.max(parsedNights, 0);
+      const days = nights + 1;
+      return {
+        nights,
+        days,
+        text: `${nights}박 ${days}일`,
+        periodText: undefined,
+      };
+    }
+
+    return null;
+  }, [startDate, endDate, tripNights]);
 
   const [data, setData] = useState<CityDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 도시 정보가 없으면 경고 후 뒤로가기 (혹은 홈으로)
     if (!cityName || !country) {
-      // 필요시 주석 해제
-      // alert("잘못된 접근입니다. 도시 정보가 없습니다.");
+      setError("잘못된 접근입니다. 도시 정보가 없습니다.");
+      setLoading(false);
       return;
     }
 
     const fetchDetail = async () => {
       try {
         setLoading(true);
-        
-        // 백엔드 API 호출 (Gemini에게 상세 정보 요청)
+
         const res = await fetch("/api/city/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          // ✅ [수정 2] body에 startDate, endDate를 추가합니다.
-          body: JSON.stringify({ cityName, country, startDate, endDate }),
+          body: JSON.stringify({ cityName, country, startDate, endDate, tripNights }),
         });
 
         if (!res.ok) {
@@ -78,8 +107,7 @@ function CityDetailContent() {
         }
 
         const result = await res.json();
-        
-        // 데이터 유효성 검사
+
         if (!result || !result.itinerary) {
           throw new Error("유효하지 않은 데이터 형식입니다.");
         }
@@ -94,11 +122,9 @@ function CityDetailContent() {
       }
     };
 
-    // 의존성 배열에 날짜 정보 추가
     fetchDetail();
-  }, [cityName, country, startDate, endDate, router]); // ✅ 의존성 배열에 startDate, endDate 추가
+  }, [cityName, country, startDate, endDate, tripNights, router]);
 
-  // 1. 로딩 UI
   if (loading) {
     return (
       <div className="flex h-[80vh] w-full flex-col items-center justify-center gap-4">
@@ -111,7 +137,6 @@ function CityDetailContent() {
     );
   }
 
-  // 2. 에러 UI
   if (error) {
     return (
       <div className="flex h-[60vh] w-full flex-col items-center justify-center gap-4">
@@ -128,10 +153,8 @@ function CityDetailContent() {
     );
   }
 
-  // 3. 정상 데이터 렌더링
   return (
     <div className="animate-fade-in mx-auto w-full max-w-5xl pb-20">
-      {/* 헤더 섹션 */}
       <header className="mb-10 text-center">
         <span className="mb-2 inline-block rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
           {country}
@@ -144,7 +167,6 @@ function CityDetailContent() {
         </p>
       </header>
 
-      {/* 정보 요약 카드 (Bento Grid 스타일) */}
       <section className="mb-12 grid gap-4 md:grid-cols-2">
         <div className="rounded-3xl bg-orange-50 p-6 text-orange-900 transition-transform hover:scale-[1.01]">
           <h3 className="mb-2 flex items-center text-sm font-bold uppercase tracking-wider opacity-70">
@@ -160,26 +182,28 @@ function CityDetailContent() {
         </div>
       </section>
 
-      {/* 3박 4일 일정 (Timeline 스타일) */}
       <section className="mb-16">
-        {/* 렌더링 부분은 여전히 3박 4일 텍스트를 사용하고 있습니다. */}
         <h2 className="mb-8 flex items-center text-2xl font-bold text-gray-900">
           <span className="mr-2 text-3xl">🗓️</span> 여행 추천 코스
-          {/* 기간을 표시할 곳이 있다면 여기에 추가해야 합니다. */}
+          {durationInfo?.text && (
+            <span className="ml-2 text-base font-semibold text-indigo-600">({durationInfo.text})</span>
+          )}
         </h2>
+        {durationInfo?.periodText && (
+          <p className="-mt-6 mb-8 text-sm text-gray-500">{durationInfo.periodText}</p>
+        )}
         <div className="space-y-8 pl-4">
           {data?.itinerary.map((day, idx) => (
             <div key={idx} className="relative border-l-2 border-indigo-100 pl-8 pb-2 last:border-0">
-              {/* 타임라인 점 */}
               <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-indigo-600 ring-4 ring-white"></div>
-              
+
               <div className="mb-2 flex items-center gap-3">
                 <span className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-bold text-white">
                   Day {day.day}
                 </span>
                 <h3 className="text-lg font-bold text-gray-900">{day.theme}</h3>
               </div>
-              
+
               <ul className="space-y-2 rounded-2xl bg-gray-50 p-5 text-sm text-gray-700 shadow-sm">
                 {day.schedule.map((item, i) => (
                   <li key={i} className="flex items-start gap-2">
@@ -193,11 +217,10 @@ function CityDetailContent() {
         </div>
       </section>
 
-      <div className="grid gap-8 md:grid-cols-2">
-        {/* 주요 명소 */}
-        <section>
+      <section className="mb-16 grid gap-8 md:grid-cols-2">
+        <div>
           <h2 className="mb-6 flex items-center text-2xl font-bold text-gray-900">
-            <span className="mr-2 text-3xl">📸</span> Must Visit
+            <span className="mr-2 text-3xl">📍</span> Must Visit Spots
           </h2>
           <div className="space-y-4">
             {data?.spots.map((spot, idx) => (
@@ -212,12 +235,11 @@ function CityDetailContent() {
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
-        {/* 추천 맛집 */}
-        <section>
+        <div>
           <h2 className="mb-6 flex items-center text-2xl font-bold text-gray-900">
-            <span className="mr-2 text-3xl">🍽️</span> Local Food
+            <span className="mr-2 text-3l">🍽️</span> Local Food
           </h2>
           <div className="space-y-4">
             {data?.foods.map((food, idx) => (
@@ -232,10 +254,9 @@ function CityDetailContent() {
               </div>
             ))}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
-      {/* 하단 버튼 */}
       <div className="mt-16 text-center">
         <Link
           href="/bookmark"
@@ -248,16 +269,11 @@ function CityDetailContent() {
   );
 }
 
-// ----------------------------------------------------------------------
-// ✅ 메인 페이지 컴포넌트 (Suspense 적용 필수)
-// ----------------------------------------------------------------------
-
 export default function CityDetailPage() {
   return (
     <div className="min-h-screen bg-white">
       <TopNavAuth />
       <main className="px-4 py-8 md:py-12">
-        {/* useSearchParams를 사용하는 컴포넌트는 반드시 Suspense로 감싸야 함 */}
         <Suspense fallback={<div className="h-screen w-full bg-white"></div>}>
           <CityDetailContent />
         </Suspense>
