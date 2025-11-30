@@ -5,7 +5,6 @@ import { NextResponse } from "next/server";
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
 const genAI = new GoogleGenerativeAI(apiKey || "");
 
-// 🚨 [핵심 수정] 추천 API와 동일하게 '사용 가능한 최신 모델'로 변경
 const MODELS_TO_TRY = [
   "gemini-2.5-flash",
   "gemini-2.0-flash",
@@ -38,15 +37,33 @@ async function generateWithFallback(prompt: string) {
 
 export async function POST(req: Request) {
   try {
-    const { cityName, country } = await req.json();
+    // ✅ [수정 1] 프론트엔드에서 보낸 날짜 정보(startDate, endDate)를 함께 받습니다.
+    const { cityName, country, startDate, endDate } = await req.json();
 
     if (!apiKey) {
         return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
     }
 
+    // ✅ [수정 2] 날짜 차이를 계산하여 'N박 M일' 텍스트를 생성하는 로직 추가
+    let durationText = "3박 4일"; // 기본값
+    let days = 4; // 기본값
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+      
+      const nights = diffDays;     // 박
+      days = diffDays + 1;         // 일 (Day)
+      durationText = `${nights}박 ${days}일`;
+    }
+
+    // ✅ [수정 3] 프롬프트에 계산된 durationText와 days 변수를 적용
     const prompt = `
       너는 전문 여행 플래너야.
       "${country} ${cityName}" 여행을 위한 알찬 정보를 알려줘.
+      여행 기간은 ${startDate}부터 ${endDate}까지, 총 ${durationText}이야.
       
       [필수 포함 내용]
       1. 도시 소개 (intro): 2~3문장으로 매력 어필.
@@ -54,7 +71,7 @@ export async function POST(req: Request) {
       3. 통화 정보 (currency).
       4. 주요 명소 (spots): 3곳 (이름, 설명).
       5. 추천 음식 (foods): 3가지 (이름, 설명).
-      6. 3박 4일 추천 일정 (itinerary): Day 1~4 별 테마와 주요 동선.
+      6. ${durationText} 추천 일정 (itinerary): Day 1~${days} 별 테마와 주요 동선.
 
       반드시 아래 JSON 형식을 준수해줘. 마크다운 없이 순수 JSON만 줘.
       {
@@ -65,7 +82,7 @@ export async function POST(req: Request) {
         "foods": [{ "name": "...", "description": "..." }],
         "itinerary": [
           { "day": 1, "theme": "...", "schedule": ["장소1", "장소2", "장소3"] },
-          ... (4일차까지)
+          ... (반드시 ${days}일차까지 작성할 것)
         ]
       }
     `;

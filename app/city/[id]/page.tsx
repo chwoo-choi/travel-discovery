@@ -42,9 +42,12 @@ function CityDetailContent() {
   const router = useRouter();
 
   // URL 쿼리 파라미터에서 도시명과 국가 가져오기
-  // 예: /city/seoul?cityName=서울&country=대한민국
   const cityName = searchParams?.get("cityName") || "";
   const country = searchParams?.get("country") || "";
+  
+  // ✅ [수정 1] URL에서 날짜 정보를 추가로 가져옵니다.
+  const startDate = searchParams?.get("startDate") || "";
+  const endDate = searchParams?.get("endDate") || "";
 
   const [data, setData] = useState<CityDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +69,8 @@ function CityDetailContent() {
         const res = await fetch("/api/city/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cityName, country }),
+          // ✅ [수정 2] body에 startDate, endDate를 추가합니다.
+          body: JSON.stringify({ cityName, country, startDate, endDate }),
         });
 
         if (!res.ok) {
@@ -90,8 +94,9 @@ function CityDetailContent() {
       }
     };
 
+    // 의존성 배열에 날짜 정보 추가
     fetchDetail();
-  }, [cityName, country, router]);
+  }, [cityName, country, startDate, endDate, router]); // ✅ 의존성 배열에 startDate, endDate 추가
 
   // 1. 로딩 UI
   if (loading) {
@@ -157,8 +162,10 @@ function CityDetailContent() {
 
       {/* 3박 4일 일정 (Timeline 스타일) */}
       <section className="mb-16">
+        {/* 렌더링 부분은 여전히 3박 4일 텍스트를 사용하고 있습니다. */}
         <h2 className="mb-8 flex items-center text-2xl font-bold text-gray-900">
-          <span className="mr-2 text-3xl">🗓️</span> 3박 4일 추천 코스
+          <span className="mr-2 text-3xl">🗓️</span> 여행 추천 코스
+          {/* 기간을 표시할 곳이 있다면 여기에 추가해야 합니다. */}
         </h2>
         <div className="space-y-8 pl-4">
           {data?.itinerary.map((day, idx) => (
