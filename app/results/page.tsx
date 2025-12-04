@@ -107,18 +107,21 @@ function SearchResultsContent() {
     });
 
     try {
+      // ✅ [방어 코드 추가] 혹시라도 값이 비어있으면 기본값("")을 보내서 서버 에러 방지
+      const payload = {
+        cityName: city.cityName || "Unknown City",
+        country: city.country || "Unknown Country",
+        emoji: city.emoji || "✈️",
+        description: city.reason || "설명 없음",
+        price: city.flightPrice || "가격 정보 없음",
+        tags: city.tags || [],
+      };
+
       const res = await fetch("/api/bookmark", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          cityName: city.cityName,
-          country: city.country,
-          emoji: city.emoji,
-          description: city.reason,
-          price: city.flightPrice,
-          tags: city.tags,
-        }),
+        body: JSON.stringify(payload),
       });
 
       // 401(비로그인) 처리
@@ -147,7 +150,7 @@ function SearchResultsContent() {
       console.error(error);
       // 에러 메시지를 사용자에게 알림
       const errorMessage = error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.";
-      alert(`북마크 저장 실패: ${errorMessage}`);
+      alert(`북마크 저장 실패: ${errorMessage}\n(서버 DB가 업데이트되지 않았을 수 있습니다.)`);
       
       // 에러 시 롤백
       setBookmarkedCities((prev) => {
