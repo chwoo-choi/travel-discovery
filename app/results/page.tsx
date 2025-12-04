@@ -8,6 +8,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+// ✅ [추가됨] React Query 훅
+import { useQuery } from "@tanstack/react-query";
 
 type Recommendation = {
   cityName: string;
@@ -26,14 +28,7 @@ function SearchResultsContent() {
   const router = useRouter();
   const { data: session } = useSession();
 
-  const [loading, setLoading] = useState(true);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(
-    new Set()
-  );
-
+  // 1. URL 파라미터 가져오기 (기존 코드 유지)
   const destination = searchParams?.get("destination") || "";
   const people = searchParams?.get("people") || "2명";
   const budgetLevel = searchParams?.get("budgetLevel") || "스탠다드";
@@ -44,44 +39,49 @@ function SearchResultsContent() {
   const dateText = departureDate ? `${departureDate} 출발` : "날짜 미정";
   const stayText = tripNights ? `· ${tripNights}박` : "";
 
-  useEffect(() => {
-    const fetchRecommendation = async () => {
-      try {
-        setLoading(true);
+  // --------------------------------------------------------------------------
+  // ✅ [핵심 변경] useEffect -> useQuery로 데이터 페칭 로직 교체
+  // --------------------------------------------------------------------------
+  const {
+    data: recommendations = [], // 데이터가 없으면 빈 배열 기본값
+    isLoading: loading,         // 로딩 상태
+    error                       // 에러 객체
+  } = useQuery({
+    // 1. 쿼리 키: 이 값들이 같으면 API를 다시 부르지 않고 저장된 데이터를 씁니다.
+    queryKey: ["recommendations", destination, people, budgetLevel, departureDate, tripNights],
+    
+    // 2. 페칭 함수: 실제 API 호출 로직 (기존 useEffect 내용 이동)
+    queryFn: async () => {
+      const res = await fetch("/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destination,
+          people,
+          budgetLevel,
+          departureDate,
+          tripNights,
+        }),
+      });
 
-        const res = await fetch("/api/recommend", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            destination,
-            people,
-            budgetLevel,
-            departureDate,
-            tripNights,
-          }),
-        });
+      if (!res.ok) throw new Error("추천 정보를 가져오지 못했습니다.");
 
-        if (!res.ok) throw new Error("추천 정보를 가져오지 못했습니다.");
+      const result = await res.json();
+      // 배열이 아니면 배열로 감싸서 반환
+      return Array.isArray(result) ? result : [result];
+    },
+    
+    // 3. 옵션 설정
+    staleTime: 1000 * 60 * 30, // 30분간 데이터 유지 (뒤로가기 시 리셋 방지 핵심)
+    gcTime: 1000 * 60 * 60,    // 1시간 동안 캐시 메모리에 보관
+    retry: false,              // 에러 발생 시 재시도 하지 않음 (AI 비용 절약)
+    refetchOnWindowFocus: false, // 탭 전환 시 재요청 방지
+  });
 
-        const result = await res.json();
-
-        if (Array.isArray(result)) {
-          setRecommendations(result);
-        } else {
-          setRecommendations([result]);
-        }
-      } catch (err) {
-        setError("여행지를 추천하는 도중 오류가 발생했습니다.");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (searchParams) {
-      fetchRecommendation();
-    }
-  }, [searchParams, destination, people, budgetLevel, departureDate, tripNights]);
+  // --------------------------------------------------------------------------
+  // 북마크 관련 로직 (기존 코드 100% 유지)
+  // --------------------------------------------------------------------------
+  const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (session?.user) {
@@ -103,7 +103,6 @@ function SearchResultsContent() {
   }, [session]);
 
   const handleBookmark = async (city: Recommendation) => {
-    // 비로그인 체크
     if (!session) {
       if (confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
         router.push("/login");
@@ -113,7 +112,6 @@ function SearchResultsContent() {
 
     const isBookmarked = bookmarkedCities.has(city.cityName);
 
-    // 낙관적 업데이트 (UI 즉시 반영)
     setBookmarkedCities((prev) => {
       const newSet = new Set(prev);
       if (isBookmarked) newSet.delete(city.cityName);
@@ -130,7 +128,7 @@ function SearchResultsContent() {
           country: city.country,
           emoji: city.emoji,
           description: city.reason,
-          price: city.flightPrice, // 혹은 비행기/숙소 가격 합산
+          price: city.flightPrice,
           tags: city.tags,
         }),
       });
@@ -139,7 +137,6 @@ function SearchResultsContent() {
     } catch (error) {
       console.error(error);
       alert("북마크 저장 중 오류가 발생했습니다.");
-      // 에러 시 롤백
       setBookmarkedCities((prev) => {
         const newSet = new Set(prev);
         if (isBookmarked) newSet.add(city.cityName);
@@ -149,6 +146,9 @@ function SearchResultsContent() {
     }
   };
 
+  // --------------------------------------------------------------------------
+  // UI 렌더링 (기존 코드 100% 유지)
+  // --------------------------------------------------------------------------
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col">
       <header className="mb-8 text-center animate-fade-in-up">
@@ -181,6 +181,7 @@ function SearchResultsContent() {
         </div>
       </header>
 
+      {/* 로딩 스켈레톤 */}
       {loading && (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
@@ -196,10 +197,11 @@ function SearchResultsContent() {
         </div>
       )}
 
+      {/* 에러 메시지 */}
       {error && !loading && (
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-3xl bg-gray-50 text-center p-6">
           <span className="text-4xl mb-3">😵</span>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-gray-600 mb-4">{(error as Error).message}</p>
           <button
             onClick={() => window.location.reload()}
             className="rounded-2xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-gray-800 transition-transform hover:scale-105"
@@ -209,10 +211,11 @@ function SearchResultsContent() {
         </div>
       )}
 
+      {/* 결과 리스트 */}
       {!loading && !error && recommendations.length > 0 && (
         <>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 pb-10">
-            {recommendations.map((city, index) => {
+            {recommendations.map((city: Recommendation, index: number) => {
               const isBookmarked = bookmarkedCities.has(city.cityName);
 
               return (
@@ -222,7 +225,7 @@ function SearchResultsContent() {
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
                   <div className="absolute top-0 left-0 h-32 w-full bg-gradient-to-br from-[#6f6bff] to-[#ba7bff] opacity-90 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="absolute top-4 left-4 z-10 flex items-center gap-1 rounded-full bg-white/30 px-2.5 py-1 backdrop-blur-md border border-white/20">
+                  <div className="absolute top-4 right-4 z-10 flex items-center gap-1 rounded-full bg-white/30 px-2.5 py-1 backdrop-blur-md border border-white/20">
                     <span className="text-[10px] font-bold text-white">
                       {city.matchScore}% 일치
                     </span>
