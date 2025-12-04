@@ -74,12 +74,12 @@ function SearchResultsContent() {
   // --------------------------------------------------------------------------
   const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
 
-  // ✅ [수정 1] 페이지 로드시 북마크 목록 요청 (credentials: "include" 추가)
+  // 페이지 로드시 북마크 목록 요청
   useEffect(() => {
     fetch("/api/bookmark", {
       method: "GET",
       headers: { "Content-Type": "application/json" },
-      credentials: "include", // 🚨 핵심: 쿠키를 서버로 전송
+      credentials: "include", 
     })
       .then((res) => {
         if (res.ok) return res.json();
@@ -107,11 +107,10 @@ function SearchResultsContent() {
     });
 
     try {
-      // ✅ [수정 2] 북마크 저장 요청 시에도 credentials: "include" 추가
       const res = await fetch("/api/bookmark", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // 🚨 핵심: 로그인 토큰(쿠키) 전송
+        credentials: "include",
         body: JSON.stringify({
           cityName: city.cityName,
           country: city.country,
@@ -122,7 +121,7 @@ function SearchResultsContent() {
         }),
       });
 
-      // API가 401(Unauthorized)을 반환하면 그때 로그인 유도
+      // 401(비로그인) 처리
       if (res.status === 401) {
         if (confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
           router.push("/login");
@@ -137,11 +136,19 @@ function SearchResultsContent() {
         return;
       }
 
-      if (!res.ok) throw new Error("저장 실패");
+      // 🚨 [에러 처리 강화] 상세 에러 메시지 확인
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const serverMessage = errorData.message || errorData.error || "알 수 없는 서버 오류";
+        throw new Error(`${serverMessage} (Code: ${res.status})`);
+      }
 
     } catch (error) {
       console.error(error);
-      alert("북마크 저장 중 오류가 발생했습니다.");
+      // 에러 메시지를 사용자에게 알림
+      const errorMessage = error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.";
+      alert(`북마크 저장 실패: ${errorMessage}`);
+      
       // 에러 시 롤백
       setBookmarkedCities((prev) => {
         const newSet = new Set(prev);
