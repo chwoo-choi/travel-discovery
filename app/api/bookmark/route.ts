@@ -1,14 +1,15 @@
 // app/api/bookmark/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma'; // ✅ 싱글톤 인스턴스 사용 (중요)
+import { prisma } from '@/lib/prisma'; // 싱글톤 인스턴스 사용
 import jwt from 'jsonwebtoken';
 
 // 🚨 API 응답 캐싱 방지 (항상 최신 데이터 로드)
 export const dynamic = "force-dynamic";
 
+// 1. 북마크 추가/삭제 (POST)
 export async function POST(req: NextRequest) {
   try {
-    // 1. 사용자 인증 (커스텀 쿠키 확인)
+    // 1) 사용자 인증
     const tokenCookie = req.cookies.get('token');
     const token = tokenCookie?.value;
 
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. 토큰 검증 및 User ID 추출
+    // 2) 토큰 검증
     const secret = process.env.JWT_SECRET || "";
     let userId: string;
     
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. 데이터 파싱
+    // 3) 데이터 파싱
     const body = await req.json();
     const { cityName, country, description, price, tags, emoji } = body;
 
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "도시 정보가 누락되었습니다." }, { status: 400 });
     }
 
-    // 4. 북마크 토글 로직 (핵심)
+    // 4) 북마크 토글 로직
     const existingBookmark = await prisma.bookmark.findUnique({
       where: {
         userId_cityName: {
@@ -65,6 +66,10 @@ export async function POST(req: NextRequest) {
       });
     } else {
       // ✅ 없으면 -> 생성 (Bookmark)
+      // 🚨 [핵심 수정] DB가 String을 원하므로 배열을 문자열로 변환 (JSON.stringify)
+      // "tags": ["맛집", "힐링"] -> "tags": "[\"맛집\", \"힐링\"]"
+      const tagsString = Array.isArray(tags) ? JSON.stringify(tags) : "[]";
+
       await prisma.bookmark.create({
         data: {
           userId,
@@ -72,7 +77,7 @@ export async function POST(req: NextRequest) {
           country,
           description: description || "",
           price: price || "",
-          tags: tags || [], // Prisma Json 타입은 배열을 바로 받음
+          tags: tagsString, // String으로 저장 (any 제거)
           emoji: emoji || '✈️',
         },
       });
@@ -94,7 +99,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 5. 북마크 목록 조회 (GET)
+// 2. 북마크 목록 조회 (GET)
 export async function GET(req: NextRequest) {
   try {
     const tokenCookie = req.cookies.get('token');
@@ -118,7 +123,28 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ count: bookmarks.length, data: bookmarks });
+    // 🚨 [핵심 수정] DB에서 꺼낸 문자열(tags)을 다시 배열로 변환해서 프론트에 전달
+    const formattedBookmarks = bookmarks.map((bookmark) => {
+      let parsedTags = [];
+      try {
+        // DB에 저장된 값이 String이라면 JSON.parse 실행
+        if (typeof bookmark.tags === 'string') {
+          parsedTags = JSON.parse(bookmark.tags);
+        } else {
+          // 이미 Json 타입이라면 그대로 사용
+          parsedTags = bookmark.tags;
+        }
+      } catch (e) {
+        parsedTags = [];
+      }
+
+      return {
+        ...bookmark,
+        tags: parsedTags,
+      };
+    });
+
+    return NextResponse.json({ count: formattedBookmarks.length, data: formattedBookmarks });
 
   } catch (error) {
     console.error('[API/Bookmark/GET] Error:', error);
