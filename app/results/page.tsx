@@ -1,15 +1,13 @@
 // app/results/page.tsx
 "use client";
 
-// 🚨 [필수] 빌드 에러 방지: 동적 페이지 강제 설정
+// 🚨 [필수] 빌드 에러 방지
 export const dynamic = "force-dynamic";
 
 import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-// 🚨 [삭제] useSession은 더 이상 사용하지 않습니다. (커스텀 쿠키 인증 사용)
-// import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 
 type Recommendation = {
@@ -27,7 +25,6 @@ type Recommendation = {
 function SearchResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  // 🚨 [삭제] const { data: session } = useSession();
 
   // 1. URL 파라미터 가져오기
   const destination = searchParams?.get("destination") || "";
@@ -41,7 +38,7 @@ function SearchResultsContent() {
   const stayText = tripNights ? `· ${tripNights}박` : "";
 
   // --------------------------------------------------------------------------
-  // 2. 추천 데이터 가져오기 (React Query 사용으로 데이터 유지)
+  // 2. 추천 데이터 가져오기 (React Query)
   // --------------------------------------------------------------------------
   const {
     data: recommendations = [],
@@ -73,16 +70,20 @@ function SearchResultsContent() {
   });
 
   // --------------------------------------------------------------------------
-  // 3. 북마크 관련 로직 (수정됨)
+  // 3. 북마크 관련 로직
   // --------------------------------------------------------------------------
   const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
 
-  // ✅ [수정] 페이지 로드시 무조건 북마크 목록 요청 (쿠키가 있으면 가져옴)
+  // ✅ [수정 1] 페이지 로드시 북마크 목록 요청 (credentials: "include" 추가)
   useEffect(() => {
-    fetch("/api/bookmark")
+    fetch("/api/bookmark", {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // 🚨 핵심: 쿠키를 서버로 전송
+    })
       .then((res) => {
         if (res.ok) return res.json();
-        return { data: [] }; // 401(비로그인)이면 빈 배열 처리
+        return { data: [] };
       })
       .then((data) => {
         if (data && Array.isArray(data.data)) {
@@ -91,20 +92,13 @@ function SearchResultsContent() {
           );
         }
       })
-      .catch(() => {}); // 에러는 조용히 무시 (비로그인 상태일 수 있음)
+      .catch(() => {});
   }, []);
 
   const handleBookmark = async (city: Recommendation) => {
-    // 🚨 [삭제] 클라이언트 세션 체크 제거 (API가 판단하도록 위임)
-    /* if (!session) {
-      ...
-      return;
-    }
-    */
-
     const isBookmarked = bookmarkedCities.has(city.cityName);
 
-    // 낙관적 업데이트 (UI 먼저 변경)
+    // 낙관적 업데이트
     setBookmarkedCities((prev) => {
       const newSet = new Set(prev);
       if (isBookmarked) newSet.delete(city.cityName);
@@ -113,9 +107,11 @@ function SearchResultsContent() {
     });
 
     try {
+      // ✅ [수정 2] 북마크 저장 요청 시에도 credentials: "include" 추가
       const res = await fetch("/api/bookmark", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // 🚨 핵심: 로그인 토큰(쿠키) 전송
         body: JSON.stringify({
           cityName: city.cityName,
           country: city.country,
@@ -126,12 +122,12 @@ function SearchResultsContent() {
         }),
       });
 
-      // ✅ [핵심 수정] API가 401(Unauthorized)을 반환하면 그때 로그인 유도
+      // API가 401(Unauthorized)을 반환하면 그때 로그인 유도
       if (res.status === 401) {
         if (confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
           router.push("/login");
         }
-        // 로그인 안 해서 실패했으므로 UI 롤백 (북마크 취소)
+        // UI 롤백
         setBookmarkedCities((prev) => {
           const newSet = new Set(prev);
           if (isBookmarked) newSet.add(city.cityName);
@@ -146,7 +142,7 @@ function SearchResultsContent() {
     } catch (error) {
       console.error(error);
       alert("북마크 저장 중 오류가 발생했습니다.");
-      // 에러 발생 시 롤백
+      // 에러 시 롤백
       setBookmarkedCities((prev) => {
         const newSet = new Set(prev);
         if (isBookmarked) newSet.add(city.cityName);
@@ -282,7 +278,7 @@ function SearchResultsContent() {
 
                       <div className="flex items-center justify-between gap-2 mt-2">
                         <Link
-                          // 상세 페이지로 정보 전달 (tripNights 포함)
+                          // 상세 페이지 링크 (tripNights 파라미터 포함)
                           href={`/city/${index}?cityName=${encodeURIComponent(
                             city.cityName
                           )}&country=${encodeURIComponent(
@@ -326,7 +322,7 @@ function SearchResultsContent() {
   );
 }
 
-// 메인 페이지 컴포넌트 (Suspense 적용)
+// 메인 페이지 컴포넌트
 export default function ResultsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
