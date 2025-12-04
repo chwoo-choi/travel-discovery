@@ -1,10 +1,8 @@
 "use client";
-import { TopNavAuth } from "@/components/TopNavAuth"; // ✅ 새로 만든 네비게이션 불러오기
+import { TopNavAuth } from "@/components/TopNavAuth"; 
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
-// 🗑️ [삭제됨] 기존 function TopNav() {...} 코드는 이제 필요 없어서 지웠습니다.
 
 export default function LoginPage() {
   const router = useRouter();

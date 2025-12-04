@@ -14,22 +14,9 @@ const INVALID_CREDENTIALS_MESSAGE = "이메일 또는 비밀번호가 올바르�
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    // 서버 설정 문제 → 500 에러로 처리
     throw new Error("JWT_SECRET 환경 변수가 설정되어 있지 않습니다.");
   }
   return secret;
-}
-
-/**
- * 현재 환경에서 secure 쿠키를 쓸지 여부 결정
- * - 프로덕션 + HTTPS(base URL이 https:// 로 시작)일 때만 true
- * - 현재 duckdns(http) 환경에서는 false가 되어야 함
- */
-function getCookieSecureFlag(): boolean {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "";
-  const isHttps = baseUrl.startsWith("https://");
-  const isProd = process.env.NODE_ENV === "production";
-  return isProd && isHttps;
 }
 
 export async function POST(req: NextRequest) {
@@ -72,7 +59,6 @@ export async function POST(req: NextRequest) {
       where: { email },
     });
 
-    // 유저가 없거나, passwordHash가 없으면(소셜 전용 계정 등) 동일한 에러 메시지
     if (!user || !user.passwordHash) {
       return NextResponse.json(
         { message: INVALID_CREDENTIALS_MESSAGE },
@@ -119,11 +105,13 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
 
-    const useSecureCookies = getCookieSecureFlag();
+    // 🚨 [핵심 수정] DuckDNS(HTTP) 환경을 위해 secure 옵션을 강제로 false로 설정
+    // 원래는 https일 때만 true여야 하는데, 지금은 http이므로 무조건 false여야 쿠키가 구워집니다.
+    const useSecureCookies = false; 
 
     response.cookies.set("token", token, {
       httpOnly: true,
-      secure: useSecureCookies,
+      secure: useSecureCookies, // ✅ false로 고정됨
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7, // 7일
@@ -131,7 +119,6 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch {
-    // JWT_SECRET 누락 등 내부 오류는 사용자에게만 간단히 안내
     return NextResponse.json(
       {
         message:
@@ -141,5 +128,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-
