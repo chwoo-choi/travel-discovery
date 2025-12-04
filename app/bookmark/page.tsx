@@ -4,11 +4,10 @@
 // 🚨 [필수] 빌드 에러 방지: 동적 페이지 강제 설정
 export const dynamic = "force-dynamic";
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { TopNavAuth } from '@/components/TopNavAuth';
-// ✅ [추가] React Query 관련 훅 불러오기
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // DB 데이터 타입 정의
@@ -26,26 +25,24 @@ interface BookmarkItem {
 // ✅ 내부 컴포넌트 분리
 function BookmarkContent() {
   const router = useRouter();
-  const queryClient = useQueryClient(); // 캐시 수동 조작을 위해 사용
+  const queryClient = useQueryClient();
 
   // --------------------------------------------------------------------------
-  // 1. 데이터 로드 (React Query 사용으로 캐시 문제 완벽 해결)
+  // 1. 데이터 로드 (React Query)
   // --------------------------------------------------------------------------
-  const { data: bookmarks = [], isLoading: loading } = useQuery<BookmarkItem[]>({
-    queryKey: ["myBookmarks"], // 이 키를 기준으로 데이터를 관리함
+  const { data: bookmarks = [], isLoading: loading, error } = useQuery<BookmarkItem[]>({
+    queryKey: ["myBookmarks"],
     queryFn: async () => {
-      const res = await fetch("/api/bookmark", {
+      // 캐시 방지용 타임스탬프
+      const res = await fetch(`/api/bookmark?t=${Date.now()}`, {
         headers: { "Content-Type": "application/json" },
         credentials: "include", // 쿠키 전송
         cache: "no-store",      // 캐시 방지
       });
 
-      // 401(비로그인) 처리
+      // 401(비로그인)이면 에러를 던져서 재시도(retry)를 유도하거나 에러 상태로 빠지게 함
       if (res.status === 401) {
-        // 로그인 페이지로 보내기 전에 알림이 필요하면 주석 해제
-        // alert('로그인이 필요한 페이지입니다.');
-        router.push("/login");
-        return []; // 빈 배열 반환
+        throw new Error("Unauthorized");
       }
 
       if (!res.ok) throw new Error("데이터를 불러오는데 실패했습니다.");
@@ -53,21 +50,29 @@ function BookmarkContent() {
       const responseData = await res.json();
       return (responseData.data as BookmarkItem[]) || [];
     },
-    // 🚨 [핵심 설정] 항상 최신 데이터를 가져오도록 설정
+    // 🚨 [핵심 설정] 실패 시 1번 더 재시도 (쿠키 인식 딜레이 해결)
+    retry: 1,
     staleTime: 0, 
     gcTime: 0, 
-    refetchOnMount: true, // 컴포넌트가 마운트될 때마다 다시 가져옴
-    refetchOnWindowFocus: true, // 탭을 다녀오면 다시 가져옴
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
+  // 2. 에러 감지 및 리다이렉트 (useEffect로 안전하게 처리)
+  useEffect(() => {
+    if (error && error.message === "Unauthorized") {
+      // alert('로그인이 필요한 페이지입니다.'); // 필요시 주석 해제
+      router.push("/login");
+    }
+  }, [error, router]);
+
   // --------------------------------------------------------------------------
-  // 2. 삭제 핸들러 (React Query 캐시 즉시 업데이트)
+  // 3. 삭제 핸들러
   // --------------------------------------------------------------------------
   const handleRemove = async (cityName: string, id: string) => {
     if (!confirm(`'${cityName}'을(를) 목록에서 삭제하시겠습니까?`)) return;
 
-    // 1) 낙관적 업데이트: 서버 응답 기다리지 않고 UI 먼저 갱신
-    // "myBookmarks"라는 키를 가진 데이터를 찾아서, 삭제하려는 id를 뺀 목록으로 갈아끼움
+    // 낙관적 업데이트
     queryClient.setQueryData(["myBookmarks"], (oldData: BookmarkItem[] | undefined) => {
       if (!oldData) return [];
       return oldData.filter((item) => item.id !== id);
@@ -75,7 +80,7 @@ function BookmarkContent() {
 
     try {
       const res = await fetch("/api/bookmark", {
-        method: "POST", // 토글 로직 활용 (이미 있으므로 삭제됨)
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
@@ -95,14 +100,12 @@ function BookmarkContent() {
       const result = await res.json();
 
       if (result.action !== "removed") {
-        // 실패 시 데이터 다시 불러와서 롤백
         alert("삭제에 실패했습니다.");
         queryClient.invalidateQueries({ queryKey: ["myBookmarks"] });
       }
     } catch (error) {
       console.error("삭제 요청 실패:", error);
       alert("서버 오류로 삭제하지 못했습니다.");
-      // 실패 시 데이터 원상복구
       queryClient.invalidateQueries({ queryKey: ["myBookmarks"] });
     }
   };
