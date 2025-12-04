@@ -37,8 +37,9 @@ function BookmarkContent() {
     try {
       setLoading(true);
       
-      // ✅ [핵심 수정] 브라우저 캐싱을 강력하게 방지하는 헤더 추가
-      const res = await fetch('/api/bookmark', {
+      // ✅ [핵심 수정] URL 뒤에 '?t=현재시간'을 붙여서 브라우저가 매번 새로운 요청으로 인식하게 만듭니다.
+      // 이렇게 하면 브라우저가 절대 캐시된 화면을 보여주지 않고 무조건 서버에 새로 요청합니다.
+      const res = await fetch(`/api/bookmark?t=${Date.now()}`, {
         headers: { 
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
