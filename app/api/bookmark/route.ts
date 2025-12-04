@@ -1,127 +1,127 @@
 // app/api/bookmark/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma'; // ✅ 싱글톤 인스턴스 사용 (중요)
+import jwt from 'jsonwebtoken';
 
 // 🚨 API 응답 캐싱 방지 (항상 최신 데이터 로드)
 export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
-const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || "default-secret-key";
-
-// 사용자 인증 헬퍼 함수
-async function getUserId() {
-  const cookieStore = await cookies(); // Next.js 15+ 호환
-  const token = cookieStore.get("token")?.value;
-
-  if (!token) return null;
-
+export async function POST(req: NextRequest) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { sub: string };
-    return decoded.sub;
-  } catch {
-    return null;
+    // 1. 사용자 인증 (커스텀 쿠키 확인)
+    const tokenCookie = req.cookies.get('token');
+    const token = tokenCookie?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: '로그인이 필요한 서비스입니다.' },
+        { status: 401 }
+      );
+    }
+
+    // 2. 토큰 검증 및 User ID 추출
+    const secret = process.env.JWT_SECRET || "";
+    let userId: string;
+    
+    try {
+      const decoded = jwt.verify(token, secret) as { sub: string };
+      userId = decoded.sub;
+    } catch (err) {
+      return NextResponse.json(
+        { error: 'Invalid Token', message: '세션이 만료되었습니다. 다시 로그인해주세요.' },
+        { status: 401 }
+      );
+    }
+
+    // 3. 데이터 파싱
+    const body = await req.json();
+    const { cityName, country, description, price, tags, emoji } = body;
+
+    if (!cityName) {
+      return NextResponse.json({ message: "도시 정보가 누락되었습니다." }, { status: 400 });
+    }
+
+    // 4. 북마크 토글 로직 (핵심)
+    const existingBookmark = await prisma.bookmark.findUnique({
+      where: {
+        userId_cityName: {
+          userId,
+          cityName,
+        },
+      },
+    });
+
+    if (existingBookmark) {
+      // ✅ 이미 존재하면 -> 삭제 (Unbookmark)
+      await prisma.bookmark.delete({
+        where: { id: existingBookmark.id },
+      });
+
+      return NextResponse.json({
+        action: 'removed',
+        message: '북마크가 해제되었습니다.',
+        cityName,
+        isBookmarked: false
+      });
+    } else {
+      // ✅ 없으면 -> 생성 (Bookmark)
+      await prisma.bookmark.create({
+        data: {
+          userId,
+          cityName,
+          country,
+          description: description || "",
+          price: price || "",
+          tags: tags || [], // Prisma Json 타입은 배열을 바로 받음
+          emoji: emoji || '✈️',
+        },
+      });
+
+      return NextResponse.json({
+        action: 'added',
+        message: '여행지가 북마크에 저장되었습니다.',
+        cityName,
+        isBookmarked: true
+      });
+    }
+
+  } catch (error: unknown) {
+    console.error('[API/Bookmark] Error:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
 
-// 1. 북마크 조회 (GET)
-export async function GET() {
+// 5. 북마크 목록 조회 (GET)
+export async function GET(req: NextRequest) {
   try {
-    const userId = await getUserId();
-    if (!userId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    const tokenCookie = req.cookies.get('token');
+    const token = tokenCookie?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const secret = process.env.JWT_SECRET || "";
+    let userId: string;
+    try {
+        const decoded = jwt.verify(token, secret) as { sub: string };
+        userId = decoded.sub;
+    } catch {
+        return NextResponse.json({ error: 'Invalid Token' }, { status: 401 });
     }
 
     const bookmarks = await prisma.bookmark.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
-    const formattedBookmarks = bookmarks.map((b) => {
-      let tags = [];
-      try {
-        tags = b.tags ? JSON.parse(b.tags as string) : [];
-      } catch {
-        tags = [];
-      }
-      return { ...b, tags };
-    });
+    return NextResponse.json({ count: bookmarks.length, data: bookmarks });
 
-    return NextResponse.json({ data: formattedBookmarks });
   } catch (error) {
-    console.error("북마크 조회 실패:", error);
-    return NextResponse.json({ message: "Server Error" }, { status: 500 });
+    console.error('[API/Bookmark/GET] Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
-
-// 2. 북마크 추가 (POST)
-export async function POST(req: NextRequest) {
-  try {
-    const userId = await getUserId();
-    if (!userId) {
-      return NextResponse.json({ message: "로그인이 필요합니다." }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const { cityName, country, emoji, description, price, tags } = body;
-
-    // 중복 저장 방지
-    const existing = await prisma.bookmark.findFirst({
-      where: { userId, cityName },
-    });
-
-    if (existing) {
-      return NextResponse.json({ message: "이미 저장된 여행지입니다." }, { status: 409 });
-    }
-
-    const newBookmark = await prisma.bookmark.create({
-      data: {
-        userId,
-        cityName,
-        country,
-        emoji,
-        description,
-        price,
-        tags: JSON.stringify(tags),
-      },
-    });
-
-    return NextResponse.json({ message: "저장되었습니다.", data: newBookmark });
-  } catch (error) {
-    console.error("북마크 저장 실패:", error);
-    return NextResponse.json({ message: "저장 중 오류가 발생했습니다." }, { status: 500 });
-  }
-}
-
-// 3. 북마크 삭제 (DELETE)
-export async function DELETE(req: NextRequest) {
-  try {
-    const userId = await getUserId();
-    if (!userId) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
-
-    // 🔹 [수정됨] 쿼리 파라미터에서 id 가져오기
-    const searchParams = req.nextUrl.searchParams;
-    const bookmarkId = searchParams.get("id");
-
-    if (!bookmarkId) {
-      return NextResponse.json({ message: "ID missing" }, { status: 400 });
-    }
-
-    await prisma.bookmark.delete({
-      where: {
-        id: bookmarkId,
-        userId, // 내 북마크만 삭제 가능하도록 안전장치
-      },
-    });
-
-    return NextResponse.json({ message: "삭제되었습니다." });
-  } catch (error) {
-    console.error("북마크 삭제 실패:", error);
-    return NextResponse.json({ message: "Server Error" }, { status: 500 });
-  }
-}
-

@@ -1,14 +1,15 @@
 // app/results/page.tsx
 "use client";
 
+// 🚨 [필수] 빌드 에러 방지: 동적 페이지 강제 설정
 export const dynamic = "force-dynamic";
 
 import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
-// ✅ [추가됨] React Query 훅
+// 🚨 [삭제] useSession은 더 이상 사용하지 않습니다. (커스텀 쿠키 인증 사용)
+// import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 
 type Recommendation = {
@@ -26,9 +27,9 @@ type Recommendation = {
 function SearchResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { data: session } = useSession();
+  // 🚨 [삭제] const { data: session } = useSession();
 
-  // 1. URL 파라미터 가져오기 (기존 코드 유지)
+  // 1. URL 파라미터 가져오기
   const destination = searchParams?.get("destination") || "";
   const people = searchParams?.get("people") || "2명";
   const budgetLevel = searchParams?.get("budgetLevel") || "스탠다드";
@@ -40,17 +41,14 @@ function SearchResultsContent() {
   const stayText = tripNights ? `· ${tripNights}박` : "";
 
   // --------------------------------------------------------------------------
-  // ✅ [핵심 변경] useEffect -> useQuery로 데이터 페칭 로직 교체
+  // 2. 추천 데이터 가져오기 (React Query 사용으로 데이터 유지)
   // --------------------------------------------------------------------------
   const {
-    data: recommendations = [], // 데이터가 없으면 빈 배열 기본값
-    isLoading: loading,         // 로딩 상태
-    error                       // 에러 객체
+    data: recommendations = [],
+    isLoading: loading,
+    error
   } = useQuery({
-    // 1. 쿼리 키: 이 값들이 같으면 API를 다시 부르지 않고 저장된 데이터를 씁니다.
     queryKey: ["recommendations", destination, people, budgetLevel, departureDate, tripNights],
-    
-    // 2. 페칭 함수: 실제 API 호출 로직 (기존 useEffect 내용 이동)
     queryFn: async () => {
       const res = await fetch("/api/recommend", {
         method: "POST",
@@ -67,51 +65,46 @@ function SearchResultsContent() {
       if (!res.ok) throw new Error("추천 정보를 가져오지 못했습니다.");
 
       const result = await res.json();
-      // 배열이 아니면 배열로 감싸서 반환
       return Array.isArray(result) ? result : [result];
     },
-    
-    // 3. 옵션 설정
-    staleTime: 1000 * 60 * 30, // 30분간 데이터 유지 (뒤로가기 시 리셋 방지 핵심)
-    gcTime: 1000 * 60 * 60,    // 1시간 동안 캐시 메모리에 보관
-    retry: false,              // 에러 발생 시 재시도 하지 않음 (AI 비용 절약)
-    refetchOnWindowFocus: false, // 탭 전환 시 재요청 방지
+    staleTime: 1000 * 60 * 30, // 30분간 데이터 유지
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // --------------------------------------------------------------------------
-  // 북마크 관련 로직 (기존 코드 100% 유지)
+  // 3. 북마크 관련 로직 (수정됨)
   // --------------------------------------------------------------------------
   const [bookmarkedCities, setBookmarkedCities] = useState<Set<string>>(new Set());
 
+  // ✅ [수정] 페이지 로드시 무조건 북마크 목록 요청 (쿠키가 있으면 가져옴)
   useEffect(() => {
-    if (session?.user) {
-      fetch("/api/bookmark")
-        .then((res) => {
-          if (res.ok) return res.json();
-          return { data: [] };
-        })
-        .then((data) => {
-          if (data && Array.isArray(data.data)) {
-            const bookmarkedSet = new Set<string>(
-              data.data.map((item: { cityName: string }) => item.cityName)
-            );
-            setBookmarkedCities(bookmarkedSet);
-          }
-        })
-        .catch((err) => console.error("북마크 로드 실패:", err));
-    }
-  }, [session]);
+    fetch("/api/bookmark")
+      .then((res) => {
+        if (res.ok) return res.json();
+        return { data: [] }; // 401(비로그인)이면 빈 배열 처리
+      })
+      .then((data) => {
+        if (data && Array.isArray(data.data)) {
+          setBookmarkedCities(
+            new Set(data.data.map((item: { cityName: string }) => item.cityName))
+          );
+        }
+      })
+      .catch(() => {}); // 에러는 조용히 무시 (비로그인 상태일 수 있음)
+  }, []);
 
   const handleBookmark = async (city: Recommendation) => {
-    if (!session) {
-      if (confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
-        router.push("/login");
-      }
+    // 🚨 [삭제] 클라이언트 세션 체크 제거 (API가 판단하도록 위임)
+    /* if (!session) {
+      ...
       return;
     }
+    */
 
     const isBookmarked = bookmarkedCities.has(city.cityName);
 
+    // 낙관적 업데이트 (UI 먼저 변경)
     setBookmarkedCities((prev) => {
       const newSet = new Set(prev);
       if (isBookmarked) newSet.delete(city.cityName);
@@ -133,10 +126,27 @@ function SearchResultsContent() {
         }),
       });
 
+      // ✅ [핵심 수정] API가 401(Unauthorized)을 반환하면 그때 로그인 유도
+      if (res.status === 401) {
+        if (confirm("로그인이 필요한 기능입니다. 로그인 페이지로 이동하시겠습니까?")) {
+          router.push("/login");
+        }
+        // 로그인 안 해서 실패했으므로 UI 롤백 (북마크 취소)
+        setBookmarkedCities((prev) => {
+          const newSet = new Set(prev);
+          if (isBookmarked) newSet.add(city.cityName);
+          else newSet.delete(city.cityName);
+          return newSet;
+        });
+        return;
+      }
+
       if (!res.ok) throw new Error("저장 실패");
+
     } catch (error) {
       console.error(error);
       alert("북마크 저장 중 오류가 발생했습니다.");
+      // 에러 발생 시 롤백
       setBookmarkedCities((prev) => {
         const newSet = new Set(prev);
         if (isBookmarked) newSet.add(city.cityName);
@@ -147,7 +157,7 @@ function SearchResultsContent() {
   };
 
   // --------------------------------------------------------------------------
-  // UI 렌더링 (기존 코드 100% 유지)
+  // UI 렌더링
   // --------------------------------------------------------------------------
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col">
@@ -272,6 +282,7 @@ function SearchResultsContent() {
 
                       <div className="flex items-center justify-between gap-2 mt-2">
                         <Link
+                          // 상세 페이지로 정보 전달 (tripNights 포함)
                           href={`/city/${index}?cityName=${encodeURIComponent(
                             city.cityName
                           )}&country=${encodeURIComponent(
@@ -315,6 +326,7 @@ function SearchResultsContent() {
   );
 }
 
+// 메인 페이지 컴포넌트 (Suspense 적용)
 export default function ResultsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
