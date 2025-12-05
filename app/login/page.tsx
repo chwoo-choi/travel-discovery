@@ -1,8 +1,11 @@
+// app/login/page.tsx
 "use client";
-import { TopNavAuth } from "@/components/TopNavAuth"; 
-import React, { useState } from "react";
+
+import { useState } from "react";
+ import { TopNavAuth } from "@/components/TopNavAuth"; 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,8 +49,11 @@ export default function LoginPage() {
         return;
       }
 
-      // ✅ 로그인 성공 시 홈 화면으로 이동
-      router.push("/");
+      // ✅ [핵심 수정] 로그인 성공 시 강제 새로고침 이동 (쿠키 인식 문제 해결)
+      if (typeof window !== 'undefined') {
+        window.location.href = "/";
+      }
+      
     } catch {
       setErrorMessage("로그인 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -57,15 +63,16 @@ export default function LoginPage() {
 
   // 🔹 구글 로그인 버튼 클릭 시 OAuth 엔드포인트로 이동
   const handleGoogleLogin = () => {
-    window.location.href = "/api/auth/google";
+    if (typeof window !== 'undefined') {
+        window.location.href = "/api/auth/google";
+    }
   };
 
   return (
     <div className="flex min-h-screen flex-col">
       
-      {/* 👇👇👇 [수정된 부분] 기존 <TopNav /> 대신 이걸로 교체! 👇👇👇 */}
+      {/* 상단 네비게이션 */}
       <TopNavAuth />
-      {/* 👆👆👆 이제 로그인 상태에 따라 메뉴가 자동으로 바뀝니다 */}
 
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/90 p-8 shadow-xl shadow-indigo-100">
@@ -123,7 +130,8 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
+                  // ✅ [타입 수정] prev 타입을 boolean으로 명시하여 에러 방지
+                  onClick={() => setShowPassword((prev: boolean) => !prev)}
                   className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                   aria-label={
                     showPassword ? "비밀번호 숨기기" : "비밀번호 보기"
@@ -213,7 +221,7 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
-
+          
           {/* 하단 링크들 */}
           <div className="mt-6 space-y-4 text-center text-xs text-gray-500">
             <p>
