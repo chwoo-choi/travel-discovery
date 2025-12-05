@@ -1,12 +1,16 @@
 // app/city/[id]/page.tsx
 "use client";
 
+// 🚨 [필수] 빌드 에러 방지: 동적 페이지 강제 설정
 export const dynamic = "force-dynamic";
+
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { TopNavAuth } from "@/components/TopNavAuth";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
+
+// ✅ 실제 컴포넌트 Import
 import WeatherWidget from "@/components/WeatherWidget";
 import ChatBot, { DayItinerary } from "@/components/ChatBot";
 
@@ -87,8 +91,12 @@ function CityDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 필수 정보가 없으면 뒤로가기 처리
+    // 필수 정보가 없으면 뒤로가기 (클라이언트 환경 체크)
     if (!cityName || !country) {
+      if (typeof window !== "undefined") {
+         // alert("잘못된 접근입니다.");
+         // router.back();
+      }
       return;
     }
 
@@ -98,7 +106,6 @@ function CityDetailContent() {
         setError(null);
         
         // 🚀 [실제 통신] 백엔드 API 호출
-        // 더미 데이터 Fallback 로직을 제거하고 오직 실제 API 결과만 사용합니다.
         const res = await fetch("/api/city/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
