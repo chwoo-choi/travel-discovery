@@ -1,4 +1,7 @@
+// app/city/[id]/page.tsx
 "use client";
+
+// 🚨 [필수] 빌드 에러 방지
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, Suspense } from "react";
@@ -45,7 +48,7 @@ function GoogleMapEmbed({ query, apiKey }: { query: string; apiKey?: string }) {
   if (!apiKey) {
     return (
       <div className="mt-3 flex h-[200px] w-full items-center justify-center rounded-xl bg-gray-100 text-xs text-gray-400 border border-gray-200">
-        🚫 지도 API 키 미설정 (Preview)
+        🚫 지도 API 키가 설정되지 않았습니다.
       </div>
     );
   }
@@ -78,13 +81,10 @@ function CityDetailContent() {
   // URL 쿼리 파라미터에서 정보 가져오기
   const cityName = searchParams?.get("cityName") || "";
   const country = searchParams?.get("country") || "";
-  
-  // 여행 기간 가져오기
-  const tripNights = searchParams?.get("tripNights") || "3"; 
+  const tripNights = searchParams?.get("tripNights") || "3";
   const nights = parseInt(tripNights);
   const days = nights + 1;
 
-  // 구글 맵 API 키
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const [data, setData] = useState<CityDetailData | null>(null);
@@ -92,9 +92,12 @@ function CityDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 필수 정보가 없으면 뒤로가기
+    // 필수 정보가 없으면 처리 (클라이언트 환경 체크)
     if (!cityName || !country) {
-      // 실제 환경에서는 리다이렉트
+      if (typeof window !== "undefined") {
+         // alert("잘못된 접근입니다.");
+         // router.back();
+      }
       return;
     }
 
@@ -103,59 +106,28 @@ function CityDetailContent() {
         setLoading(true);
         setError(null);
         
-        // 🚀 [실제 통신] 백엔드 API 호출
-        try {
-            const res = await fetch("/api/city/detail", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    cityName, 
-                    country, 
-                    tripNights 
-                }),
-            });
+        // 🚀 실제 백엔드 API 호출
+        const res = await fetch("/api/city/detail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            cityName, 
+            country, 
+            tripNights 
+          }),
+        });
 
-            if (!res.ok) throw new Error("API call failed");
-            const result = await res.json();
-            
-            if (!result || !result.itinerary) {
-                throw new Error("유효하지 않은 데이터 형식입니다.");
-            }
-            setData(result);
-
-        } catch (apiError) {
-            // 💡 [미리보기용 Fallback] API가 없는 환경이므로 더미 데이터 표시
-            console.warn("API 호출 실패 (미리보기 환경 예상): 더미 데이터를 표시합니다.");
-            await new Promise(r => setTimeout(r, 1000));
-            setData({
-                intro: `${cityName}는(은) 야시장과 미식의 천국입니다. 타이베이 101 타워와 고궁 박물관 등 볼거리가 풍부합니다.`,
-                bestSeason: "10월 ~ 4월",
-                currency: "대만 달러 (TWD)",
-                flights: {
-                    price: "왕복 약 30~40만원",
-                    tip: "LCC 특가를 이용하면 더 저렴하게 다녀올 수 있습니다."
-                },
-                accommodation: {
-                    area: "시먼딩 또는 타이베이 메인역",
-                    reason: "교통의 요지이며 맛집과 상점이 밀집해 있어 여행하기 편리합니다."
-                },
-                spots: [
-                    { name: "타이베이 101", description: "도시 전경을 한눈에 볼 수 있는 랜드마크" },
-                    { name: "스린 야시장", description: "다양한 길거리 음식을 즐길 수 있는 최대 규모 야시장" },
-                    { name: "지우펀", description: "센과 치히로의 행방불명의 배경이 된 아름다운 마을" }
-                ],
-                foods: [
-                    { name: "우육면", description: "진한 국물과 부드러운 소고기가 일품인 국수" },
-                    { name: "망고 빙수", description: "달콤한 망고가 듬뿍 올라간 대만 대표 디저트" },
-                    { name: "샤오롱바오", description: "육즙이 가득한 딤섬" }
-                ],
-                itinerary: Array.from({ length: days }).map((_, i) => ({
-                    day: i + 1,
-                    theme: `Day ${i + 1} 시티 투어`,
-                    schedule: ["오전: 고궁 박물관 관람", "점심: 딘타이펑 딤섬", "오후: 단수이 일몰 감상"]
-                }))
-            });
+        if (!res.ok) {
+          throw new Error("상세 정보를 불러오는데 실패했습니다.");
         }
+
+        const result = await res.json();
+        
+        if (!result || !result.itinerary) {
+          throw new Error("유효하지 않은 데이터 형식입니다.");
+        }
+
+        setData(result);
 
       } catch (err) {
         console.error("City Detail Error:", err);
@@ -166,7 +138,7 @@ function CityDetailContent() {
     };
 
     fetchDetail();
-  }, [cityName, country, tripNights, router, days]);
+  }, [cityName, country, tripNights, router]);
 
   // 로딩 UI
   if (loading) {
@@ -317,12 +289,13 @@ function CityDetailContent() {
 
       {/* 하단 버튼 */}
       <div className="mt-16 text-center">
-        <Link
-          href="/bookmark"
+        {/* ✅ [핵심 수정] Link 태그를 button으로 교체하여 에러 해결 */}
+        <button
+          onClick={() => router.back()}
           className="inline-flex items-center rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white transition-transform hover:scale-105"
         >
           목록으로 돌아가기
-        </Link>
+        </button>
       </div>
     </div>
   );
