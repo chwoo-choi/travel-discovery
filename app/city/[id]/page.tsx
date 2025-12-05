@@ -1,13 +1,14 @@
 // app/city/[id]/page.tsx
 "use client";
 
-// 🚨 [필수] 빌드 에러 방지
 export const dynamic = "force-dynamic";
-
 import { useEffect, useState, Suspense } from "react";
-import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { motion } from "framer-motion";
+import { TopNavAuth } from "@/components/TopNavAuth";
+import WeatherWidget from "@/components/WeatherWidget";
+import ChatBot, { DayItinerary } from "@/components/ChatBot";
 
 // ----------------------------------------------------------------------
 // ✅ 데이터 타입 정의
@@ -16,12 +17,6 @@ import Link from "next/link";
 interface PlaceDetail {
   name: string;
   description: string;
-}
-
-interface DayItinerary {
-  day: number;
-  theme: string;
-  schedule: string[];
 }
 
 interface CityDetailData {
@@ -48,7 +43,7 @@ function GoogleMapEmbed({ query, apiKey }: { query: string; apiKey?: string }) {
   if (!apiKey) {
     return (
       <div className="mt-3 flex h-[200px] w-full items-center justify-center rounded-xl bg-gray-100 text-xs text-gray-400 border border-gray-200">
-        🚫 지도 API 키가 설정되지 않았습니다.
+        🚫 지도 API 키 미설정
       </div>
     );
   }
@@ -92,12 +87,8 @@ function CityDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 필수 정보가 없으면 처리 (클라이언트 환경 체크)
+    // 필수 정보가 없으면 뒤로가기 처리
     if (!cityName || !country) {
-      if (typeof window !== "undefined") {
-         // alert("잘못된 접근입니다.");
-         // router.back();
-      }
       return;
     }
 
@@ -106,7 +97,8 @@ function CityDetailContent() {
         setLoading(true);
         setError(null);
         
-        // 🚀 실제 백엔드 API 호출
+        // 🚀 [실제 통신] 백엔드 API 호출
+        // 더미 데이터 Fallback 로직을 제거하고 오직 실제 API 결과만 사용합니다.
         const res = await fetch("/api/city/detail", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -123,6 +115,7 @@ function CityDetailContent() {
 
         const result = await res.json();
         
+        // 데이터 유효성 검사
         if (!result || !result.itinerary) {
           throw new Error("유효하지 않은 데이터 형식입니다.");
         }
@@ -140,7 +133,14 @@ function CityDetailContent() {
     fetchDetail();
   }, [cityName, country, tripNights, router]);
 
-  // 로딩 UI
+  // 챗봇이 일정을 수정했을 때 호출되는 함수
+  const handleUpdateItinerary = (newItinerary: DayItinerary[]) => {
+    if (data) {
+      setData({ ...data, itinerary: newItinerary });
+    }
+  };
+
+  // 1. 로딩 UI
   if (loading) {
     return (
       <div className="flex h-[80vh] w-full flex-col items-center justify-center gap-4">
@@ -153,7 +153,7 @@ function CityDetailContent() {
     );
   }
 
-  // 에러 UI
+  // 2. 에러 UI
   if (error) {
     return (
       <div className="flex h-[60vh] w-full flex-col items-center justify-center gap-4">
@@ -170,10 +170,19 @@ function CityDetailContent() {
     );
   }
 
+  // 3. 정상 데이터 렌더링
   return (
-    <div className="animate-fade-in mx-auto w-full max-w-5xl pb-20">
-      {/* 헤더 */}
-      <header className="mb-10 text-center">
+    <div className="animate-fade-in mx-auto w-full max-w-5xl pb-32">
+      {/* 헤더 섹션 */}
+      <header className="mb-10 text-center relative">
+        {/* 날씨 위젯 */}
+        <div className="absolute right-0 top-0 hidden md:block">
+          <WeatherWidget city={cityName} />
+        </div>
+        <div className="flex justify-center md:hidden mb-4">
+          <WeatherWidget city={cityName} />
+        </div>
+
         <span className="mb-2 inline-block rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
           {country}
         </span>
@@ -185,44 +194,59 @@ function CityDetailContent() {
         </p>
       </header>
 
-      {/* 정보 요약 (Bento Grid) */}
+      {/* 정보 요약 카드 (Bento Grid 스타일) */}
       <section className="mb-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-3xl bg-orange-50 p-6 text-orange-900 transition-transform hover:scale-[1.02]">
+        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-orange-50 p-6 text-orange-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             ☀️ Best Season
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.bestSeason}</p>
-        </div>
-        <div className="rounded-3xl bg-emerald-50 p-6 text-emerald-900 transition-transform hover:scale-[1.02]">
+        </motion.div>
+
+        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-emerald-50 p-6 text-emerald-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             💵 Currency
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.currency}</p>
-        </div>
-        <div className="rounded-3xl bg-sky-50 p-6 text-sky-900 transition-transform hover:scale-[1.02]">
+        </motion.div>
+
+        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-sky-50 p-6 text-sky-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             ✈️ Flight Estimate
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.flights?.price || "정보 없음"}</p>
           <p className="mt-1 text-xs opacity-80">{data?.flights?.tip}</p>
-        </div>
-        <div className="rounded-3xl bg-purple-50 p-6 text-purple-900 transition-transform hover:scale-[1.02]">
+        </motion.div>
+
+        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-purple-50 p-6 text-purple-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             🏨 Stay Area
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.accommodation?.area || "정보 없음"}</p>
           <p className="mt-1 text-xs opacity-80 line-clamp-2">{data?.accommodation?.reason}</p>
-        </div>
+        </motion.div>
       </section>
 
-      {/* 일정 (Timeline) */}
+      {/* 일정 (Timeline 스타일) */}
       <section className="mb-16">
-        <h2 className="mb-8 flex items-center text-2xl font-bold text-gray-900">
-          <span className="mr-2 text-3xl">🗓️</span> {nights}박 {days}일 추천 코스
-        </h2>
+        <div className="mb-8 flex items-center justify-between">
+          <h2 className="flex items-center text-2xl font-bold text-gray-900">
+            <span className="mr-2 text-3xl">🗓️</span> {nights}박 {days}일 추천 코스
+          </h2>
+          <span className="text-xs text-gray-400 hidden sm:block">
+            ✨ 우측 하단 챗봇으로 일정을 수정해보세요
+          </span>
+        </div>
+
         <div className="space-y-8 pl-4">
           {data?.itinerary.map((day, idx) => (
-            <div key={idx} className="relative border-l-2 border-indigo-100 pl-8 pb-2 last:border-0">
+            <motion.div 
+              key={idx}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              className="relative border-l-2 border-indigo-100 pl-8 pb-2 last:border-0"
+            >
               <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-indigo-600 ring-4 ring-white"></div>
               <div className="mb-2 flex items-center gap-3">
                 <span className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-bold text-white">
@@ -230,7 +254,7 @@ function CityDetailContent() {
                 </span>
                 <h3 className="text-lg font-bold text-gray-900">{day.theme}</h3>
               </div>
-              <ul className="space-y-2 rounded-2xl bg-gray-50 p-5 text-sm text-gray-700 shadow-sm">
+              <ul className="space-y-2 rounded-2xl bg-gray-50 p-5 text-sm text-gray-700 shadow-sm hover:shadow-md transition-shadow">
                 {day.schedule.map((item, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400"></span>
@@ -238,21 +262,22 @@ function CityDetailContent() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </motion.div>
           ))}
         </div>
       </section>
 
       <div className="grid gap-8 md:grid-cols-2">
-        {/* 관광지 (지도) */}
+        {/* 주요 명소 (지도 포함) */}
         <section>
           <h2 className="mb-6 flex items-center text-2xl font-bold text-gray-900">
             <span className="mr-2 text-3xl">📍</span> Must Visit
           </h2>
           <div className="space-y-6">
             {data?.spots.map((spot, idx) => (
-              <div
+              <motion.div 
                 key={idx}
+                whileHover={{ y: -5 }}
                 className="group overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-indigo-100 hover:shadow-md"
               >
                 <h3 className="mb-1 text-lg font-bold text-gray-900 group-hover:text-indigo-600">
@@ -260,20 +285,21 @@ function CityDetailContent() {
                 </h3>
                 <p className="text-sm text-gray-500 mb-2">{spot.description}</p>
                 <GoogleMapEmbed query={`${cityName} ${spot.name}`} apiKey={googleMapsApiKey} />
-              </div>
+              </motion.div>
             ))}
           </div>
         </section>
 
-        {/* 맛집 (지도) */}
+        {/* 추천 맛집 (지도 포함) */}
         <section>
           <h2 className="mb-6 flex items-center text-2xl font-bold text-gray-900">
             <span className="mr-2 text-3xl">🍽️</span> Local Food
           </h2>
           <div className="space-y-6">
             {data?.foods.map((food, idx) => (
-              <div
+              <motion.div 
                 key={idx}
+                whileHover={{ y: -5 }}
                 className="group overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-orange-100 hover:shadow-md"
               >
                 <h3 className="mb-1 text-lg font-bold text-gray-900 group-hover:text-orange-600">
@@ -281,7 +307,7 @@ function CityDetailContent() {
                 </h3>
                 <p className="text-sm text-gray-500 mb-2">{food.description}</p>
                 <GoogleMapEmbed query={`${cityName} ${food.name} 맛집`} apiKey={googleMapsApiKey} />
-              </div>
+              </motion.div>
             ))}
           </div>
         </section>
@@ -289,17 +315,27 @@ function CityDetailContent() {
 
       {/* 하단 버튼 */}
       <div className="mt-16 text-center">
-        {/* ✅ [핵심 수정] Link 태그를 button으로 교체하여 에러 해결 */}
         <button
           onClick={() => router.back()}
-          className="inline-flex items-center rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white transition-transform hover:scale-105"
+          className="inline-flex items-center rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:shadow-lg"
         >
           목록으로 돌아가기
         </button>
       </div>
+      
+      {/* 🤖 챗봇 탑재 */}
+      <ChatBot 
+        cityName={cityName} 
+        currentItinerary={data?.itinerary || []} 
+        onUpdateItinerary={handleUpdateItinerary} 
+      />
     </div>
   );
 }
+
+// ----------------------------------------------------------------------
+// ✅ 메인 페이지 컴포넌트 (Suspense 적용 필수)
+// ----------------------------------------------------------------------
 
 export default function CityDetailPage() {
   return (
