@@ -1,9 +1,7 @@
 // app/city/[id]/page.tsx
 "use client";
 
-// 🚨 [필수] 빌드 에러 방지
 export const dynamic = "force-dynamic";
-
 import { useEffect, useState, Suspense } from "react";
 import { motion } from "framer-motion";
 import { TopNavAuth } from "@/components/TopNavAuth";
@@ -92,6 +90,8 @@ function CityDetailContent() {
     // 필수 정보가 없으면 뒤로가기 처리
     if (!cityName || !country) {
       // 실제 환경에서는 리다이렉트
+      setError("도시 정보가 없습니다. 검색 페이지에서 다시 시도해주세요.");
+      setLoading(false);
       return;
     }
 

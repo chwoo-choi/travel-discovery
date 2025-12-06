@@ -2,22 +2,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
-// 아이콘을 사용하기 위해 lucide-react 패키지가 필요합니다.
-// 설치가 안 되어 있다면 터미널에: npm install lucide-react
-import { Loader2 } from "lucide-react"; 
+// 전문적인 날씨 아이콘 사용 (lucide-react)
+import { 
+  Loader2, 
+  Cloud, 
+  CloudRain, 
+  CloudLightning, 
+  Snowflake, 
+  Sun, 
+  CloudDrizzle, 
+  Wind, 
+  Droplets 
+} from "lucide-react";
 
 interface WeatherData {
   temp: number;
+  temp_min: number;
+  temp_max: number;
+  humidity: number;
+  wind_speed: number;
   description: string;
-  icon: string;
+  iconCode: string;
 }
+
+// 날씨 코드에 따라 예쁜 아이콘을 매칭하는 함수
+const getWeatherIcon = (iconCode: string) => {
+  if (iconCode.includes("01")) return <Sun className="h-12 w-12 text-orange-400" />; // 맑음
+  if (iconCode.includes("02")) return <Cloud className="h-12 w-12 text-yellow-200 fill-yellow-100" />; // 구름 조금
+  if (iconCode.includes("03") || iconCode.includes("04")) return <Cloud className="h-12 w-12 text-gray-400" />; // 흐림
+  if (iconCode.includes("09")) return <CloudDrizzle className="h-12 w-12 text-blue-300" />; // 이슬비
+  if (iconCode.includes("10")) return <CloudRain className="h-12 w-12 text-blue-500" />; // 비
+  if (iconCode.includes("11")) return <CloudLightning className="h-12 w-12 text-purple-500" />; // 뇌우
+  if (iconCode.includes("13")) return <Snowflake className="h-12 w-12 text-sky-200" />; // 눈
+  if (iconCode.includes("50")) return <Wind className="h-12 w-12 text-gray-300" />; // 안개
+  return <Sun className="h-12 w-12 text-orange-400" />; // 기본값
+};
 
 export default function WeatherWidget({ city }: { city: string }) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  // .env 파일에 NEXT_PUBLIC_OPENWEATHER_KEY 키가 없으면 데모 모드로 동작합니다.
-  // 키가 없어도 에러가 나지 않고 가짜 날씨(24도, 맑음)를 보여줍니다.
   const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_KEY;
 
   useEffect(() => {
@@ -25,16 +50,16 @@ export default function WeatherWidget({ city }: { city: string }) {
 
     const fetchWeather = async () => {
       try {
-        // API 키가 없는 경우 데모 데이터 표시 (개발 편의성)
+        setLoading(true);
+        
+        // 키가 없으면 콘솔에 경고 출력 후 에러 상태로 전환
         if (!API_KEY) {
-          setTimeout(() => {
-            setWeather({ temp: 24, description: "맑음", icon: "01d" });
-            setLoading(false);
-          }, 800);
+          console.error("🚫 OpenWeather API 키가 없습니다.");
+          setError(true); 
+          setLoading(false);
           return;
         }
 
-        // 실제 날씨 API 호출
         const res = await fetch(
           `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&lang=kr&appid=${API_KEY}`
         );
@@ -45,13 +70,17 @@ export default function WeatherWidget({ city }: { city: string }) {
         
         setWeather({
           temp: Math.round(data.main.temp),
+          temp_min: Math.round(data.main.temp_min),
+          temp_max: Math.round(data.main.temp_max),
+          humidity: data.main.humidity,
+          wind_speed: data.wind.speed,
           description: data.weather[0].description,
-          icon: data.weather[0].icon,
+          iconCode: data.weather[0].icon,
         });
-      } catch (error) {
-        console.error("날씨 정보를 가져오는데 실패했습니다.", error);
-        // 에러 시에도 UI가 깨지지 않도록 데모 데이터 설정
-        setWeather({ temp: 22, description: "맑음", icon: "01d" });
+        setError(false);
+      } catch (err) {
+        console.error("날씨 로딩 실패:", err);
+        setError(true);
       } finally {
         setLoading(false);
       }
@@ -60,23 +89,63 @@ export default function WeatherWidget({ city }: { city: string }) {
     fetchWeather();
   }, [city, API_KEY]);
 
-  if (loading) return <Loader2 className="h-5 w-5 animate-spin text-gray-400" />;
-  if (!weather) return null;
+  // 로딩 중
+  if (loading) {
+    return (
+      <div className="flex h-28 w-40 flex-col items-center justify-center rounded-3xl bg-white/50 backdrop-blur-md border border-white/40 shadow-sm">
+        <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+        <span className="mt-2 text-xs text-gray-500">날씨 확인 중...</span>
+      </div>
+    );
+  }
 
+  // 에러 발생 시 (API 키 문제 등)
+  if (error || !weather) {
+    return (
+      <div className="flex h-28 w-40 flex-col items-center justify-center rounded-3xl bg-white/50 backdrop-blur-md border border-white/40 shadow-sm">
+        <Cloud className="h-8 w-8 text-gray-300" />
+        <span className="mt-2 text-xs text-gray-400">정보 없음</span>
+      </div>
+    );
+  }
+
+  // ✅ [디자인 업그레이드] 카드 형태의 날씨 위젯
   return (
-    <div className="flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur-sm border border-gray-100">
-      <span className="text-xl" role="img" aria-label={weather.description}>
-        {/* OpenWeatherMap 아이콘 코드에 따른 이모지 매핑 */}
-        {weather.icon.includes("01") ? "☀️" : 
-         weather.icon.includes("02") ? "⛅" : 
-         weather.icon.includes("03") || weather.icon.includes("04") ? "☁️" :
-         weather.icon.includes("09") || weather.icon.includes("10") ? "🌧️" : 
-         weather.icon.includes("11") ? "⚡" :
-         weather.icon.includes("13") ? "❄️" : "🌤️"}
-      </span>
-      <div className="flex flex-col leading-none">
-        <span className="text-xs font-bold text-gray-800">{weather.temp}°C</span>
-        <span className="text-[10px] text-gray-500">{weather.description}</span>
+    <div className="relative overflow-hidden rounded-[2rem] bg-white/80 p-5 shadow-lg backdrop-blur-xl border border-white/50 transition-transform hover:scale-105">
+      {/* 배경 장식 */}
+      <div className="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 blur-xl"></div>
+
+      <div className="relative z-10 flex items-center gap-4">
+        {/* 아이콘 */}
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
+          {getWeatherIcon(weather.iconCode)}
+        </div>
+
+        {/* 온도 및 설명 */}
+        <div className="flex flex-col">
+          <span className="text-3xl font-extrabold text-gray-800 leading-none">
+            {weather.temp}°
+          </span>
+          <span className="text-xs font-medium text-gray-500 mt-1">
+            {weather.description}
+          </span>
+        </div>
+      </div>
+
+      {/* 하단 상세 정보 (습도, 바람) */}
+      <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-500">
+        <div className="flex items-center gap-1">
+          <Droplets className="h-3 w-3 text-blue-400" />
+          <span>{weather.humidity}%</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Wind className="h-3 w-3 text-gray-400" />
+          <span>{weather.wind_speed}m/s</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-gray-400">H:</span>
+          <span>{weather.temp_max}°</span>
+        </div>
       </div>
     </div>
   );
