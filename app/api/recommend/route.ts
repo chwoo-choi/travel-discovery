@@ -2,6 +2,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
