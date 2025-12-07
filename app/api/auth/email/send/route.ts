@@ -1,8 +1,7 @@
+// app/api/auth/email/send/route.ts
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma"; // ✅ 안전한 DB 연결 방식 사용
 import nodemailer from "nodemailer";
-
-const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +15,7 @@ export async function POST(req: Request) {
     
     const email = body.email?.trim().toLowerCase();
 
-    // 2. 이메일 유효성 검사 (님의 기존 코드 로직 반영)
+    // 2. 이메일 유효성 검사
     if (!email) {
       return NextResponse.json({ message: "이메일을 입력해주세요." }, { status: 400 });
     }
@@ -29,8 +28,7 @@ export async function POST(req: Request) {
     // 3. 6자리 랜덤 인증번호 생성
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 4. DB 저장 (VerificationToken 모델 사용)
-    // 기존 코드를 삭제하고 새로 덮어씁니다.
+    // 4. DB 저장 (기존 코드 삭제 후 덮어쓰기)
     await prisma.verificationToken.deleteMany({
       where: { identifier: email },
     });
@@ -47,13 +45,15 @@ export async function POST(req: Request) {
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: process.env.NODEMAILER_USER,
-        pass: process.env.NODEMAILER_PASS,
+        // ✅ [핵심 수정] .env 파일에 적은 이름(GMAIL_USER)과 똑같이 맞췄습니다.
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS,
       },
     });
 
     await transporter.sendMail({
-      from: process.env.NODEMAILER_USER,
+      // ✅ 보내는 사람도 환경 변수에서 가져오도록 수정
+      from: process.env.GMAIL_USER,
       to: email,
       subject: "[스마트 트래블 플래너] 회원가입 인증번호",
       html: `
@@ -72,9 +72,10 @@ export async function POST(req: Request) {
       `,
     });
 
-    console.log(`[Server] 이메일 발송 성공: ${email} -> ${code}`);
+    console.log(`[Server] 이메일 발송 성공: ${email}`);
 
     return NextResponse.json({ message: "인증번호 전송 성공" });
+
   } catch (error) {
     console.error("메일 전송 실패:", error);
     return NextResponse.json({ message: "메일 전송에 실패했습니다." }, { status: 500 });
