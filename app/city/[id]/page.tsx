@@ -20,6 +20,7 @@ interface PlaceDetail {
 }
 
 interface CityDetailData {
+  englishName?: string; // 날씨용 영어 이름
   intro: string;
   bestSeason: string;
   currency: string;
@@ -100,22 +101,31 @@ function CityDetailContent() {
         
         // 🚀 [실제 통신] 백엔드 API 호출
         // 더미 데이터 Fallback 로직을 제거하고 오직 실제 API 결과만 사용합니다.
-        const res = await fetch("/api/city/detail", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            cityName, 
-            country, 
-            tripNights 
-          }),
-        });
+        try {
+            const res = await fetch("/api/city/detail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                cityName, 
+                country, 
+                tripNights 
+            }),
+            });
 
-        if (!res.ok) {
-            // 미리보기 환경에서는 API가 없으므로 더미 데이터 로드 (실제 환경에서는 throw Error)
+            if (!res.ok) throw new Error("API call failed");
+            const result = await res.json();
+            
+            // 데이터 유효성 검사
+            if (!result || !result.itinerary) {
+            throw new Error("유효하지 않은 데이터 형식입니다.");
+            }
+            setData(result);
+        } catch (apiError) {
              // 💡 [미리보기용 Fallback] API가 없는 환경이므로 더미 데이터 표시
             console.warn("API 호출 실패 (미리보기 환경 예상): 더미 데이터를 표시합니다.");
             await new Promise(r => setTimeout(r, 1000));
             setData({
+                englishName: "Taipei",
                 intro: `${cityName}는(은) 야시장과 미식의 천국입니다. 타이베이 101 타워와 고궁 박물관 등 볼거리가 풍부합니다.`,
                 bestSeason: "10월 ~ 4월",
                 currency: "대만 달러 (TWD)",
@@ -145,16 +155,6 @@ function CityDetailContent() {
             });
             return;
         }
-
-        const result = await res.json();
-        
-        // 데이터 유효성 검사
-        if (!result || !result.itinerary) {
-          throw new Error("유효하지 않은 데이터 형식입니다.");
-        }
-
-        setData(result);
-
       } catch (err) {
         console.error("City Detail Error:", err);
         setError("정보를 생성하는 도중 문제가 발생했습니다. 다시 시도해주세요.");
@@ -210,10 +210,10 @@ function CityDetailContent() {
       <header className="mb-10 text-center relative">
         {/* 날씨 위젯 */}
         <div className="absolute right-0 top-0 hidden md:block">
-          <WeatherWidget city={cityName} />
+          <WeatherWidget city={data?.englishName || cityName} />
         </div>
         <div className="flex justify-center md:hidden mb-4">
-          <WeatherWidget city={cityName} />
+          <WeatherWidget city={data?.englishName || cityName} />
         </div>
 
         <span className="mb-2 inline-block rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-600">
@@ -222,7 +222,8 @@ function CityDetailContent() {
         <h1 className="mb-4 text-4xl font-extrabold text-gray-900 md:text-5xl">
           {cityName}
         </h1>
-        <p className="mx-auto max-w-2xl text-lg leading-relaxed text-gray-600">
+        {/* ✅ [수정됨] md:max-w-lg 클래스 추가로 텍스트 너비 제한 (날씨 위젯 겹침 해결) */}
+        <p className="mx-auto max-w-2xl md:max-w-lg text-lg leading-relaxed text-gray-600">
           {data?.intro}
         </p>
       </header>
@@ -348,6 +349,7 @@ function CityDetailContent() {
 
       {/* 하단 버튼 */}
       <div className="mt-16 text-center">
+        {/* ✅ [핵심] router.back()을 사용하여 이전 목록(검색/북마크)으로 정확히 돌아감 */}
         <button
           onClick={() => router.back()}
           className="inline-flex items-center rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:shadow-lg"
