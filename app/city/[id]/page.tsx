@@ -1,12 +1,17 @@
 // app/city/[id]/page.tsx
 "use client";
 
+
+// 🚨 [필수] 빌드 에러 방지: 동적 페이지 강제 설정
 export const dynamic = "force-dynamic";
+
 import { useEffect, useState, Suspense } from "react";
 import { motion } from "framer-motion";
 import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+
+// ✅ 실제 컴포넌트 Import
 import WeatherWidget from "@/components/WeatherWidget";
 import ChatBot, { DayItinerary } from "@/components/ChatBot";
 
@@ -89,7 +94,7 @@ function CityDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 필수 정보가 없으면 뒤로가기
+    // 필수 정보가 없으면 뒤로가기 (클라이언트 환경 체크)
     if (!cityName || !country) {
       return;
     }
@@ -110,7 +115,8 @@ function CityDetailContent() {
           }),
         });
 
-        // 🚨 [수정 완료] 더미 데이터 Fallback 로직을 제거하고, 실패 시 바로 에러를 던집니다.
+        // 🚨 [수정 완료] 더미 데이터 Fallback 로직을 완전히 제거했습니다.
+        // API가 실패하면 즉시 에러를 던져서, 사용자가 잘못된 정보를 보지 않게 합니다.
         if (!res.ok) {
           throw new Error("상세 정보를 불러오는데 실패했습니다.");
         }
@@ -144,8 +150,7 @@ function CityDetailContent() {
     }
   };
 
-
-  // 1. 로딩 UI
+  // 로딩 UI
   if (loading) {
     return (
       <div className="flex h-[80vh] w-full flex-col items-center justify-center gap-4">
@@ -158,7 +163,7 @@ function CityDetailContent() {
     );
   }
 
-  // 2. 에러 UI
+  // 에러 UI
   if (error) {
     return (
       <div className="flex h-[60vh] w-full flex-col items-center justify-center gap-4">
@@ -175,12 +180,13 @@ function CityDetailContent() {
     );
   }
 
-  // 3. 정상 데이터 렌더링
+  // 정상 데이터 렌더링
   return (
     <div className="animate-fade-in mx-auto w-full max-w-5xl pb-32">
       {/* 헤더 섹션 */}
       <header className="mb-10 text-center relative">
         {/* 날씨 위젯 */}
+        {/* ✅ 영어 이름이 있으면 그걸로 날씨 검색 (없으면 한글 이름) */}
         <div className="absolute right-0 top-0 hidden md:block">
           <WeatherWidget city={data?.englishName || cityName} />
         </div>
@@ -194,7 +200,7 @@ function CityDetailContent() {
         <h1 className="mb-4 text-4xl font-extrabold text-gray-900 md:text-5xl">
           {cityName}
         </h1>
-        {/* ✅ [수정됨] md:max-w-lg 클래스 추가로 텍스트 너비 제한 (날씨 위젯 겹침 해결) */}
+        {/* 텍스트 너비 제한으로 날씨 위젯 겹침 방지 */}
         <p className="mx-auto max-w-2xl md:max-w-lg text-lg leading-relaxed text-gray-600">
           {data?.intro}
         </p>
@@ -208,29 +214,26 @@ function CityDetailContent() {
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.bestSeason}</p>
         </motion.div>
-
-        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-emerald-50 p-6 text-emerald-900 transition-transform hover:shadow-md">
+        <div className="rounded-3xl bg-emerald-50 p-6 text-emerald-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             💵 Currency
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.currency}</p>
-        </motion.div>
-
-        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-sky-50 p-6 text-sky-900 transition-transform hover:shadow-md">
+        </div>
+        <div className="rounded-3xl bg-sky-50 p-6 text-sky-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             ✈️ Flight Estimate
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.flights?.price || "정보 없음"}</p>
           <p className="mt-1 text-xs opacity-80">{data?.flights?.tip}</p>
-        </motion.div>
-
-        <motion.div whileHover={{ scale: 1.02 }} className="rounded-3xl bg-purple-50 p-6 text-purple-900 transition-transform hover:shadow-md">
+        </div>
+        <div className="rounded-3xl bg-purple-50 p-6 text-purple-900 transition-transform hover:shadow-md">
           <h3 className="mb-2 flex items-center text-xs font-bold uppercase tracking-wider opacity-70">
             🏨 Stay Area
           </h3>
           <p className="text-sm font-bold md:text-base">{data?.accommodation?.area || "정보 없음"}</p>
           <p className="mt-1 text-xs opacity-80 line-clamp-2">{data?.accommodation?.reason}</p>
-        </motion.div>
+        </div>
       </section>
 
       {/* 일정 (Timeline 스타일) */}
@@ -321,7 +324,6 @@ function CityDetailContent() {
 
       {/* 하단 버튼 */}
       <div className="mt-16 text-center">
-        {/* ✅ [핵심] router.back()을 사용하여 이전 목록(검색/북마크)으로 정확히 돌아감 */}
         <button
           onClick={() => router.back()}
           className="inline-flex items-center rounded-full bg-gray-900 px-8 py-3 text-sm font-bold text-white transition-transform hover:scale-105 hover:shadow-lg"
