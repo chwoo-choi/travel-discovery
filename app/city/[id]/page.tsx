@@ -3,7 +3,7 @@
 
 export const dynamic = "force-dynamic";
 import { useEffect, useState, Suspense } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { TopNavAuth } from "@/components/TopNavAuth";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -20,7 +20,8 @@ interface PlaceDetail {
 }
 
 interface CityDetailData {
-  englishName?: string; // 날씨용 영어 이름
+  // ✅ [핵심] 날씨용 영어 이름 필드
+  englishName?: string;
   intro: string;
   bestSeason: string;
   currency: string;
@@ -44,7 +45,7 @@ function GoogleMapEmbed({ query, apiKey }: { query: string; apiKey?: string }) {
   if (!apiKey) {
     return (
       <div className="mt-3 flex h-[200px] w-full items-center justify-center rounded-xl bg-gray-100 text-xs text-gray-400 border border-gray-200">
-        🚫 지도 API 키 미설정 (Preview)
+        🚫 지도 API 키 미설정
       </div>
     );
   }
@@ -88,9 +89,8 @@ function CityDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 필수 정보가 없으면 뒤로가기 처리
+    // 필수 정보가 없으면 뒤로가기
     if (!cityName || !country) {
-      // 실제 환경에서는 리다이렉트
       return;
     }
 
@@ -100,63 +100,33 @@ function CityDetailContent() {
         setError(null);
         
         // 🚀 [실제 통신] 백엔드 API 호출
-        // 더미 데이터 Fallback 로직을 제거하고 오직 실제 API 결과만 사용합니다.
-        try {
-            const res = await fetch("/api/city/detail", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                cityName, 
-                country, 
-                tripNights 
-            }),
-            });
+        const res = await fetch("/api/city/detail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            cityName, 
+            country, 
+            tripNights 
+          }),
+        });
 
-            if (!res.ok) throw new Error("API call failed");
-            const result = await res.json();
-            
-            // 데이터 유효성 검사
-            if (!result || !result.itinerary) {
-            throw new Error("유효하지 않은 데이터 형식입니다.");
-            }
-            setData(result);
-        } catch (apiError) {
-             // 💡 [미리보기용 Fallback] API가 없는 환경이므로 더미 데이터 표시
-            console.warn("API 호출 실패 (미리보기 환경 예상): 더미 데이터를 표시합니다.");
-            await new Promise(r => setTimeout(r, 1000));
-            setData({
-                englishName: "Taipei",
-                intro: `${cityName}는(은) 야시장과 미식의 천국입니다. 타이베이 101 타워와 고궁 박물관 등 볼거리가 풍부합니다.`,
-                bestSeason: "10월 ~ 4월",
-                currency: "대만 달러 (TWD)",
-                flights: {
-                    price: "왕복 약 30~40만원",
-                    tip: "LCC 특가를 이용하면 더 저렴하게 다녀올 수 있습니다."
-                },
-                accommodation: {
-                    area: "시먼딩 또는 타이베이 메인역",
-                    reason: "교통의 요지이며 맛집과 상점이 밀집해 있어 여행하기 편리합니다."
-                },
-                spots: [
-                    { name: "타이베이 101", description: "도시 전경을 한눈에 볼 수 있는 랜드마크" },
-                    { name: "스린 야시장", description: "다양한 길거리 음식을 즐길 수 있는 최대 규모 야시장" },
-                    { name: "지우펀", description: "센과 치히로의 행방불명의 배경이 된 아름다운 마을" }
-                ],
-                foods: [
-                    { name: "우육면", description: "진한 국물과 부드러운 소고기가 일품인 국수" },
-                    { name: "망고 빙수", description: "달콤한 망고가 듬뿍 올라간 대만 대표 디저트" },
-                    { name: "샤오롱바오", description: "육즙이 가득한 딤섬" }
-                ],
-                itinerary: Array.from({ length: days }).map((_, i) => ({
-                    day: i + 1,
-                    theme: `Day ${i + 1} 시티 투어`,
-                    schedule: ["오전: 고궁 박물관 관람", "점심: 딘타이펑 딤섬", "오후: 단수이 일몰 감상"]
-                }))
-            });
-            return;
+        // 🚨 [수정 완료] 더미 데이터 Fallback 로직을 제거하고, 실패 시 바로 에러를 던집니다.
+        if (!res.ok) {
+          throw new Error("상세 정보를 불러오는데 실패했습니다.");
         }
+
+        const result = await res.json();
+        
+        // 데이터 유효성 검사
+        if (!result || !result.itinerary) {
+          throw new Error("유효하지 않은 데이터 형식입니다.");
+        }
+
+        setData(result);
+
       } catch (err) {
         console.error("City Detail Error:", err);
+        // 실제 API 오류 시 에러 메시지만 설정합니다.
         setError("정보를 생성하는 도중 문제가 발생했습니다. 다시 시도해주세요.");
       } finally {
         setLoading(false);
@@ -164,14 +134,16 @@ function CityDetailContent() {
     };
 
     fetchDetail();
-  }, [cityName, country, tripNights, router, days]);
+  }, [cityName, country, tripNights, router]);
 
   // 챗봇이 일정을 수정했을 때 호출되는 함수
   const handleUpdateItinerary = (newItinerary: DayItinerary[]) => {
     if (data) {
       setData({ ...data, itinerary: newItinerary });
+      alert("일정이 수정되었습니다! ✨");
     }
   };
+
 
   // 1. 로딩 UI
   if (loading) {
