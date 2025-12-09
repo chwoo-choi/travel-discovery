@@ -105,20 +105,19 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
 
-    // 🚨 [핵심 수정] DuckDNS(HTTP) 환경을 위해 secure 옵션을 강제로 false로 설정
-    // 원래는 https일 때만 true여야 하는데, 지금은 http이므로 무조건 false여야 쿠키가 구워집니다.
-    const useSecureCookies = false; 
-
+    // 🚨 [최종 수정] HTTP 환경 호환을 위해 secure 옵션을 'false'로 고정
+    // 변수 사용 없이 직접 false를 입력하여 실수를 방지합니다.
     response.cookies.set("token", token, {
       httpOnly: true,
-      secure: useSecureCookies, // ✅ false로 고정됨
+      secure: false, // ✅ 여기가 핵심입니다. 무조건 false.
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7, // 7일
     });
 
     return response;
-  } catch {
+  } catch (error) {
+    console.error("Login error:", error);
     return NextResponse.json(
       {
         message:
